@@ -59,6 +59,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Core\ActiveEquipmentBonusesTooltip.cs" />
+    <Compile Include="Equipment\Armor\CloaksItems.cs" />
     <Compile Include="Equipment\Weapons\AmmunitionItems.cs" />
     <Compile Include="Class1.cs" />
     <Compile Include="Core\ArmorDamageReductionDiagnostic.cs" />

@@ -25,6 +25,7 @@ namespace SolastaExpandedEquipmentMod
                 return false;
             }
 
+            FreeMovementEquipDiagnostic.Initialize();
             bool freeMovement = RegisterFreeMovement(itemDb);
             bool knock = RegisterSpellRing(itemDb,
                 "RingOfKnock", "Ring of Knock",
@@ -305,6 +306,10 @@ namespace SolastaExpandedEquipmentMod
                     return false;
                 }
 
+                // TEMPORARY EXPANDED DIAGNOSTIC: inspect the condition, its features,
+                // movement-affinity settings, and comparable terrain-related definitions.
+                RunFreedomMovementDiagnostic(freedomCondition);
+
                 ItemDefinition item = UnityEngine.Object.Instantiate(baseRing);
                 if (item == null)
                     return false;
@@ -343,6 +348,10 @@ namespace SolastaExpandedEquipmentMod
                     Debug.LogError(LogPrefix + "Could not set passive features for " + displayName + ".");
                     return false;
                 }
+
+                // Confirm the ring definition itself contains all three original
+                // Freedom of Movement features before it enters the item database.
+                LogFreeMovementStaticProperties(item);
 
                 itemDb.Add(item);
                 bool registered = itemDb.GetElement(itemId, true) != null;
@@ -827,6 +836,205 @@ namespace SolastaExpandedEquipmentMod
             return added;
         }
 
+        private static void RunFreedomMovementDiagnostic(ConditionDefinition condition)
+        {
+            Debug.Log(LogPrefix + "=== FREEDOM MOVEMENT EXPANDED DIAGNOSTIC START ===");
+
+            DumpDiagnosticMembers("CONDITION", condition);
+
+            object featureCollection = ReadMember(condition, "Features", "features");
+            IEnumerable features = featureCollection as IEnumerable;
+            int featureIndex = 0;
+
+            if (features != null)
+            {
+                foreach (object feature in features)
+                {
+                    if (feature == null)
+                        continue;
+
+                    object featureName = ReadMember(feature, "Name", "name");
+                    string name = Convert.ToString(featureName);
+                    string label = "CONDITION FEATURE " + featureIndex + " [" + name + "]";
+
+                    Debug.Log(LogPrefix + label + " TYPE=" + feature.GetType().FullName);
+                    DumpDiagnosticMembers(label, feature);
+
+                    if (feature.GetType().Name.IndexOf("MovementAffinity", StringComparison.OrdinalIgnoreCase) >= 0)
+                        DumpDiagnosticMembers("MOVEMENT AFFINITY DETAIL", feature);
+
+                    featureIndex++;
+                }
+            }
+            else
+            {
+                Debug.LogWarning(LogPrefix + "Condition feature collection could not be read.");
+            }
+
+            Debug.Log(LogPrefix + "CONDITION FEATURE COUNT=" + featureIndex);
+
+            // Compare Freedom of Movement with other movement-affinity definitions.
+            // This helps identify the exact terrain-related field or enum used by the game.
+            try
+            {
+                Database<FeatureDefinitionMovementAffinity> movementDb =
+                    DatabaseRepository.GetDatabase<FeatureDefinitionMovementAffinity>();
+
+                if (movementDb == null)
+                {
+                    Debug.LogWarning(LogPrefix + "Movement-affinity database unavailable.");
+                }
+                else
+                {
+                    int matches = 0;
+                    foreach (FeatureDefinitionMovementAffinity candidate in movementDb.GetAllElements())
+                    {
+                        if (candidate == null)
+                            continue;
+
+                        string candidateName = candidate.Name ?? string.Empty;
+                        string searchable = candidateName + " " +
+                            Convert.ToString(ReadMember(candidate, "GuiPresentation", "guiPresentation"));
+
+                        bool relevant =
+                            candidateName.IndexOf("Freedom", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            candidateName.IndexOf("Terrain", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            candidateName.IndexOf("Movement", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            searchable.IndexOf("Terrain", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                        if (!relevant)
+                            continue;
+
+                        matches++;
+                        string label = "RELATED MOVEMENT DEFINITION [" + candidateName + "]";
+                        Debug.Log(LogPrefix + label + " TYPE=" + candidate.GetType().FullName);
+                        DumpDiagnosticMembers(label, candidate);
+                    }
+
+                    Debug.Log(LogPrefix + "RELATED MOVEMENT DEFINITION COUNT=" + matches);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(LogPrefix + "Movement-affinity comparison scan failed: " + ex);
+            }
+
+            Debug.Log(LogPrefix + "=== FREEDOM MOVEMENT EXPANDED DIAGNOSTIC END ===");
+        }
+
+        private static void DumpDiagnosticMembers(string label, object target)
+        {
+            if (target == null)
+            {
+                Debug.LogWarning(LogPrefix + label + " is NULL.");
+                return;
+            }
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            HashSet<string> logged = new HashSet<string>();
+            Type targetType = target.GetType();
+
+            Debug.Log(LogPrefix + label + " OBJECT TYPE=" + targetType.FullName);
+
+            for (Type type = targetType; type != null; type = type.BaseType)
+            {
+                FieldInfo[] fields = type.GetFields(flags | BindingFlags.DeclaredOnly);
+                foreach (FieldInfo field in fields)
+                {
+                    if (field == null || !logged.Add("F:" + field.Name))
+                        continue;
+
+                    try
+                    {
+                        object value = field.GetValue(target);
+                        Debug.Log(LogPrefix + label + " FIELD " + type.Name + "." +
+                            field.Name + " (" + field.FieldType.FullName + ") = " +
+                            FormatDiagnosticValue(value));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log(LogPrefix + label + " FIELD " + field.Name +
+                            " <read failed: " + ex.GetType().Name + ">");
+                    }
+                }
+
+                PropertyInfo[] properties = type.GetProperties(flags | BindingFlags.DeclaredOnly);
+                foreach (PropertyInfo property in properties)
+                {
+                    if (property == null || property.GetIndexParameters().Length != 0 ||
+                        property.GetGetMethod(true) == null || !logged.Add("P:" + property.Name))
+                        continue;
+
+                    try
+                    {
+                        object value = property.GetValue(target, null);
+                        Debug.Log(LogPrefix + label + " PROPERTY " + type.Name + "." +
+                            property.Name + " (" + property.PropertyType.FullName + ") = " +
+                            FormatDiagnosticValue(value));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log(LogPrefix + label + " PROPERTY " + property.Name +
+                            " <read failed: " + ex.GetType().Name + ">");
+                    }
+                }
+            }
+        }
+
+        private static string FormatDiagnosticValue(object value)
+        {
+            if (value == null)
+                return "<null>";
+
+            Type valueType = value.GetType();
+
+            if (value is string || valueType.IsPrimitive || valueType.IsEnum ||
+                value is decimal || value is Guid)
+                return Convert.ToString(value);
+
+            UnityEngine.Object unityObject = value as UnityEngine.Object;
+            if (unityObject != null)
+                return unityObject.name + " [" + valueType.FullName + "]";
+
+            IEnumerable enumerable = value as IEnumerable;
+            if (enumerable != null && !(value is string))
+            {
+                List<string> entries = new List<string>();
+                int count = 0;
+
+                foreach (object entry in enumerable)
+                {
+                    if (count >= 20)
+                    {
+                        entries.Add("...");
+                        break;
+                    }
+
+                    if (entry == null)
+                        entries.Add("<null>");
+                    else
+                    {
+                        object entryName = ReadMember(entry, "Name", "name");
+                        string name = Convert.ToString(entryName);
+                        entries.Add(string.IsNullOrEmpty(name)
+                            ? entry.GetType().Name + ":" + Convert.ToString(entry)
+                            : name + " [" + entry.GetType().Name + "]");
+                    }
+
+                    count++;
+                }
+
+                return "[" + string.Join(", ", entries.ToArray()) + "]";
+            }
+
+            object namedValue = ReadMember(value, "Name", "name");
+            string namedText = Convert.ToString(namedValue);
+            if (!string.IsNullOrEmpty(namedText))
+                return namedText + " [" + valueType.FullName + "]";
+
+            return valueType.FullName + " [" + Convert.ToString(value) + "]";
+        }
+
         private static ItemPropertyDescription FindPropertyTemplate(Database<ItemDefinition> itemDb)
         {
             foreach (ItemDefinition item in itemDb.GetAllElements())
@@ -1003,6 +1211,76 @@ namespace SolastaExpandedEquipmentMod
 
             return null;
         }
+
+        private static void LogFreeMovementStaticProperties(ItemDefinition item)
+        {
+            try
+            {
+                int paralyzed = 0;
+                int restrained = 0;
+                int movement = 0;
+
+                if (item == null || item.StaticProperties == null)
+                {
+                    Debug.LogError(LogPrefix + "PRE-EQUIP CHECK: Ring staticProperties is NULL.");
+                    return;
+                }
+
+                foreach (ItemPropertyDescription property in item.StaticProperties)
+                {
+                    if (property == null)
+                        continue;
+
+                    FeatureDefinition feature = property.FeatureDefinition;
+                    string featureName = feature == null ? "<null>" : feature.Name;
+                    bool difficultTerrain = false;
+
+                    FeatureDefinitionMovementAffinity movementAffinity =
+                        feature as FeatureDefinitionMovementAffinity;
+                    if (movementAffinity != null)
+                        difficultTerrain = movementAffinity.ImmuneDifficultTerrain;
+
+                    if (featureName.IndexOf("Paralyzed", StringComparison.OrdinalIgnoreCase) >= 0)
+                        paralyzed++;
+                    if (featureName.IndexOf("Restrained", StringComparison.OrdinalIgnoreCase) >= 0)
+                        restrained++;
+                    if (movementAffinity != null)
+                        movement++;
+
+                    Debug.Log(LogPrefix + "PRE-EQUIP CHECK: property type=" +
+                        Convert.ToString(ReadMember(property, "Type", "type")) +
+                        ", feature=" + featureName +
+                        ", featureType=" + (feature == null ? "<null>" : feature.GetType().Name) +
+                        ", ImmuneDifficultTerrain=" + difficultTerrain);
+                }
+
+                Debug.Log(LogPrefix + "PRE-EQUIP SUMMARY: ParalyzedAffinity=" + (paralyzed > 0) +
+                    ", RestrainedAffinity=" + (restrained > 0) +
+                    ", MovementAffinity=" + (movement > 0) +
+                    ", DifficultTerrainImmunity=" + HasDifficultTerrainImmunity(item) +
+                    ", StaticPropertyCount=" + item.StaticProperties.Count);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(LogPrefix + "PRE-EQUIP check failed: " + ex);
+            }
+        }
+
+        private static bool HasDifficultTerrainImmunity(ItemDefinition item)
+        {
+            if (item == null || item.StaticProperties == null)
+                return false;
+
+            foreach (ItemPropertyDescription property in item.StaticProperties)
+            {
+                FeatureDefinitionMovementAffinity movement =
+                    property == null ? null : property.FeatureDefinition as FeatureDefinitionMovementAffinity;
+                if (movement != null && movement.ImmuneDifficultTerrain)
+                    return true;
+            }
+
+            return false;
+        }
     }
 }
 
@@ -1111,9 +1389,9 @@ internal static class RingSlotItems
             }
 
             ItemDefinition template = FindRingTemplate(itemDb);
-            if (template == null)
+            if (template == null || template.GuiPresentation == null)
             {
-                Debug.LogError(LogPrefix + "Could not find a ring template for " + ring.Title + ".");
+                Debug.LogError(LogPrefix + "Could not find a ring template with a valid GUI presentation for " + ring.Title + ".");
                 return false;
             }
 
@@ -1205,6 +1483,18 @@ internal static class RingSlotItems
             feature.IsUserContent = true;
         }
 
+        // Unfinished Business scans feature definitions while building its
+        // documentation. It expects every registered feature to have usable GUI
+        // text, so repair or create that presentation before the feature enters
+        // the database.
+        if (!EnsureSlotAffinityPresentation(feature, featureDb, ring))
+        {
+            Debug.LogError(LogPrefix + "Could not create a valid GUI presentation for " + featureName + ".");
+            if (isNew)
+                UnityEngine.Object.Destroy(feature);
+            return null;
+        }
+
         List<AdditionalSlotsDuplet> slots = new List<AdditionalSlotsDuplet>();
         for (int i = 0; i < ring.Levels.Length; i++)
         {
@@ -1214,6 +1504,8 @@ internal static class RingSlotItems
                 !SetMember(slot, "slotsNumber", ring.Counts[i]))
             {
                 Debug.LogError(LogPrefix + "Could not configure spell-slot entry for " + ring.Title + ".");
+                if (isNew)
+                    UnityEngine.Object.Destroy(feature);
                 return null;
             }
 
@@ -1223,6 +1515,8 @@ internal static class RingSlotItems
         if (!SetMember(feature, "additionalSlots", slots))
         {
             Debug.LogError(LogPrefix + "Could not set spell-slot bonuses for " + ring.Title + ".");
+            if (isNew)
+                UnityEngine.Object.Destroy(feature);
             return null;
         }
 
@@ -1232,7 +1526,62 @@ internal static class RingSlotItems
             feature = featureDb.GetElement(featureName, true);
         }
 
+        if (feature == null || feature.GuiPresentation == null ||
+            string.IsNullOrEmpty(feature.GuiPresentation.Title) ||
+            string.IsNullOrEmpty(feature.GuiPresentation.Description))
+        {
+            Debug.LogError(LogPrefix + "Spell-slot feature " + featureName +
+                " failed its post-registration GUI-presentation check.");
+            return null;
+        }
+
         return feature;
+    }
+
+    private static bool EnsureSlotAffinityPresentation(
+        FeatureDefinitionMagicAffinity feature,
+        Database<FeatureDefinitionMagicAffinity> featureDb,
+        RingSpec ring)
+    {
+        if (feature == null || featureDb == null || ring == null)
+            return false;
+
+        GuiPresentation sourcePresentation = feature.GuiPresentation;
+
+        if (sourcePresentation == null || string.IsNullOrEmpty(sourcePresentation.Description))
+        {
+            sourcePresentation = null;
+
+            foreach (FeatureDefinitionMagicAffinity candidate in featureDb.GetAllElements())
+            {
+                if (candidate == null || object.ReferenceEquals(candidate, feature) ||
+                    candidate.GuiPresentation == null ||
+                    string.IsNullOrEmpty(candidate.GuiPresentation.Description))
+                    continue;
+
+                sourcePresentation = candidate.GuiPresentation;
+                break;
+            }
+        }
+
+        if (sourcePresentation == null)
+        {
+            Debug.LogError(LogPrefix + "No existing magic-affinity feature has a usable GUI presentation template.");
+            return false;
+        }
+
+        GuiPresentation presentation = new GuiPresentation(sourcePresentation);
+        presentation.Title = ring.Title + " Spell Slot Affinity";
+        presentation.Description = BuildDescription(ring);
+
+        if (string.IsNullOrEmpty(presentation.Title) || string.IsNullOrEmpty(presentation.Description) ||
+            !SetMember(feature, "guiPresentation", presentation))
+            return false;
+
+        GuiPresentation assigned = feature.GuiPresentation;
+        return assigned != null &&
+            !string.IsNullOrEmpty(assigned.Title) &&
+            !string.IsNullOrEmpty(assigned.Description);
     }
 
     private static string BuildDescription(RingSpec ring)
@@ -1388,6 +1737,169 @@ internal static class RingSlotItems
 }
 
 /// <summary>Filters slot affinities to the class named by each ring.</summary>
+/// <summary>
+/// Logs the Free Movement ring's actual equipped features after the game's
+/// inventory refresh has completed.
+/// </summary>
+internal static class FreeMovementEquipDiagnostic
+{
+    private const string LogPrefix = "[Solasta Expanded Equipment] ";
+    private const string RingId = "RingOfFreeMovement";
+    private static bool initialized;
+
+    public static void Initialize()
+    {
+        if (initialized)
+            return;
+
+        try
+        {
+            MethodInfo target = AccessTools.Method(
+                typeof(RulesetCharacterHero),
+                "ItemEquiped",
+                new[] { typeof(RulesetInventory), typeof(RulesetInventorySlot), typeof(RulesetItem) });
+
+            if (target == null)
+            {
+                Debug.LogError(LogPrefix + "EQUIP CHECK: Could not find RulesetCharacterHero.ItemEquiped.");
+                return;
+            }
+
+            Harmony harmony = new Harmony("SolastaExpandedEquipmentMod.FreeMovementEquipDiagnostic");
+            HarmonyMethod postfix = new HarmonyMethod(
+                typeof(FreeMovementEquipDiagnostic).GetMethod(
+                    nameof(AfterItemEquiped), BindingFlags.Static | BindingFlags.NonPublic));
+
+            harmony.Patch(target, postfix: postfix);
+            initialized = true;
+            Debug.Log(LogPrefix + "Free Movement equip diagnostic patch active.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError(LogPrefix + "EQUIP CHECK patch initialization failed: " + ex);
+        }
+    }
+
+    private static void AfterItemEquiped(
+        RulesetCharacterHero __instance,
+        RulesetInventorySlot __1,
+        RulesetItem __2)
+    {
+        try
+        {
+            if (__instance == null || __2 == null || __2.ItemDefinition == null)
+                return;
+
+            ItemDefinition item = __2.ItemDefinition;
+            if (!string.Equals(item.Name, RingId, StringComparison.Ordinal))
+                return;
+
+            string characterName = Convert.ToString(ReadMember(__instance, "Name", "name"));
+            string characterGuid = Convert.ToString(ReadMember(__instance, "Guid", "guid"));
+            string slotName = Convert.ToString(ReadMember(
+                ReadMember(__1, "SlotTypeDefinition", "slotTypeDefinition"), "Name", "name"));
+
+            Debug.Log(LogPrefix + "EQUIP CHECK: Ring equipped. Character=" + characterName +
+                ", GUID=" + characterGuid + ", Slot=" + slotName +
+                ", Item=" + item.Name + ".");
+
+            int paralyzed = 0;
+            int restrained = 0;
+            int movement = 0;
+            int difficultTerrain = 0;
+
+            object activeFeaturesObject = ReadMember(__instance, "activeItemFeatures");
+            IDictionary activeFeatures = activeFeaturesObject as IDictionary;
+            object itemFeaturesObject = null;
+
+            if (activeFeatures != null && activeFeatures.Contains(item))
+                itemFeaturesObject = activeFeatures[item];
+
+            IEnumerable activeFeaturesForRing = itemFeaturesObject as IEnumerable;
+            if (activeFeaturesForRing != null)
+            {
+                foreach (object featureObject in activeFeaturesForRing)
+                {
+                    FeatureDefinition feature = featureObject as FeatureDefinition;
+                    if (feature == null)
+                        continue;
+
+                    string featureName = feature.Name ?? "<unnamed>";
+                    FeatureDefinitionMovementAffinity movementAffinity =
+                        feature as FeatureDefinitionMovementAffinity;
+                    bool ignoresDifficultTerrain = movementAffinity != null &&
+                        movementAffinity.ImmuneDifficultTerrain;
+
+                    if (featureName.IndexOf("Paralyzed", StringComparison.OrdinalIgnoreCase) >= 0)
+                        paralyzed++;
+                    if (featureName.IndexOf("Restrained", StringComparison.OrdinalIgnoreCase) >= 0)
+                        restrained++;
+                    if (movementAffinity != null)
+                    {
+                        movement++;
+                        if (ignoresDifficultTerrain)
+                            difficultTerrain++;
+                    }
+
+                    Debug.Log(LogPrefix + "EQUIP CHECK ACTIVE FEATURE: " + featureName +
+                        ", Type=" + feature.GetType().Name +
+                        ", ImmuneDifficultTerrain=" + ignoresDifficultTerrain);
+                }
+            }
+            else
+            {
+                Debug.LogError(LogPrefix + "EQUIP CHECK: Could not read activeItemFeatures entry for Ring of Free Movement. " +
+                    "DictionaryFound=" + (activeFeatures != null) +
+                    ", RingEntryFound=" + (itemFeaturesObject != null) + ".");
+            }
+
+            Debug.Log(LogPrefix + "EQUIP CHECK SUMMARY: Character=" + characterName +
+                ", ActiveParalyzedAffinity=" + (paralyzed > 0) +
+                ", ActiveRestrainedAffinity=" + (restrained > 0) +
+                ", ActiveMovementAffinity=" + (movement > 0) +
+                ", ActiveDifficultTerrainImmunity=" + (difficultTerrain > 0) +
+                ", ActiveFeatureCount=" + (activeFeaturesForRing == null ? 0 : CountFeatures(activeFeaturesForRing)) + ".");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError(LogPrefix + "EQUIP CHECK failed: " + ex);
+        }
+    }
+
+    private static int CountFeatures(IEnumerable features)
+    {
+        int count = 0;
+        foreach (object feature in features)
+            if (feature != null)
+                count++;
+        return count;
+    }
+
+    private static object ReadMember(object target, params string[] names)
+    {
+        if (target == null)
+            return null;
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        for (Type type = target.GetType(); type != null; type = type.BaseType)
+        {
+            foreach (string name in names)
+            {
+                FieldInfo field = type.GetField(name, flags | BindingFlags.DeclaredOnly);
+                if (field != null)
+                    return field.GetValue(target);
+
+                PropertyInfo property = type.GetProperty(name, flags | BindingFlags.DeclaredOnly);
+                if (property != null && property.GetIndexParameters().Length == 0 &&
+                    property.GetGetMethod(true) != null)
+                    return property.GetValue(target, null);
+            }
+        }
+
+        return null;
+    }
+}
+
 internal static class SpellSlotRingPatch
 {
     private const string LogPrefix = "[Solasta Expanded Equipment] ";

@@ -82,7 +82,7 @@ namespace SolastaExpandedEquipmentMod
                 }
 
                 FeatureDefinitionAttackModifier modifier =
-                    CreateAttackModifier(itemId, displayName, 1);
+                    CreateAttackModifier(itemId, displayName, 1, baseSword.GuiPresentation);
 
                 if (modifier == null)
                 {
@@ -241,7 +241,7 @@ namespace SolastaExpandedEquipmentMod
                 }
 
                 FeatureDefinitionAttackModifier modifier =
-                    CreateAttackModifier(itemId, displayName, 1);
+                    CreateAttackModifier(itemId, displayName, 1, baseWeapon.GuiPresentation);
                 if (modifier == null)
                 {
                     return false;
@@ -348,7 +348,7 @@ namespace SolastaExpandedEquipmentMod
                 }
 
                 FeatureDefinitionAttackModifier modifier =
-                    CreateAttackModifier(itemId, displayName, 1);
+                    CreateAttackModifier(itemId, displayName, 1, baseWeapon.GuiPresentation);
                 if (modifier == null)
                 {
                     return false;
@@ -455,7 +455,7 @@ namespace SolastaExpandedEquipmentMod
                 }
 
                 FeatureDefinitionAttackModifier modifier =
-                    CreateAttackModifier(itemId, displayName, 1);
+                    CreateAttackModifier(itemId, displayName, 1, baseWeapon.GuiPresentation);
                 if (modifier == null)
                 {
                     return false;
@@ -646,7 +646,7 @@ namespace SolastaExpandedEquipmentMod
                 }
 
                 FeatureDefinitionAttackModifier modifier =
-                    CreateAttackModifier(itemId, displayName, 1);
+                    CreateAttackModifier(itemId, displayName, 1, baseDart.GuiPresentation);
                 if (modifier == null)
                 {
                     return false;
@@ -1101,7 +1101,7 @@ namespace SolastaExpandedEquipmentMod
                 // Create the feature that supplies the attack and damage
                 // bonuses while the dart is used.
                 FeatureDefinitionAttackModifier modifier =
-                    CreateAttackModifier(itemId, displayName, bonus);
+                    CreateAttackModifier(itemId, displayName, bonus, baseDart.GuiPresentation);
 
                 if (modifier == null)
                 {
@@ -1179,7 +1179,8 @@ namespace SolastaExpandedEquipmentMod
         private static FeatureDefinitionAttackModifier CreateAttackModifier(
             string itemId,
             string displayName,
-            int bonus)
+            int bonus,
+            GuiPresentation sourcePresentation)
         {
             FeatureDefinitionAttackModifier modifier =
                 ScriptableObject.CreateInstance<
@@ -1198,6 +1199,45 @@ namespace SolastaExpandedEquipmentMod
             modifier.ForceName(itemId + "AttackModifier");
             modifier.SetUserContentGUID(Guid.NewGuid().ToString());
             modifier.IsUserContent = true;
+
+            // Feature definitions are included in Unfinished Business' documentation
+            // dump. Give this custom feature its own non-null GUI presentation so
+            // DumpOthers/StripXmlTags never receives a null description from it.
+            if (sourcePresentation == null)
+            {
+                Debug.LogError(
+                    LogPrefix +
+                    "Cannot create attack modifier for " + displayName +
+                    ": source GUI presentation is missing.");
+
+                UnityEngine.Object.Destroy(modifier);
+                return null;
+            }
+
+            GuiPresentation modifierPresentation =
+                new GuiPresentation(sourcePresentation);
+            modifierPresentation.Title = displayName + " Attack Modifier";
+            modifierPresentation.Description =
+                "Provides +" + bonus +
+                " to attack rolls and +" + bonus +
+                " to damage rolls when applied by " + displayName + ".";
+
+            if (!SetField(modifier, "guiPresentation", modifierPresentation) ||
+                modifier.GuiPresentation == null ||
+                string.IsNullOrEmpty(modifier.GuiPresentation.Description))
+            {
+                Debug.LogError(
+                    LogPrefix +
+                    "Could not assign a valid GUI presentation to the attack modifier for " +
+                    displayName + ".");
+
+                UnityEngine.Object.Destroy(modifier);
+                return null;
+            }
+
+            Debug.Log(
+                LogPrefix + "Created attack modifier " + modifier.Name +
+                " with a non-empty GUI description.");
 
             bool attackMethodSet = SetField(
                 modifier,

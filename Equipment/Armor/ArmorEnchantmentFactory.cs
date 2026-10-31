@@ -206,6 +206,13 @@ namespace SolastaExpandedEquipmentMod
             bool expectsSpellFunction = false,
             bool requiresAttunement = true)
         {
+            // Unfinished Business strips XML tags from definition descriptions during
+            // startup documentation generation. Never let a custom armor definition
+            // enter the item database with a null or blank GUI description.
+            string safeDescription = string.IsNullOrWhiteSpace(description)
+                ? (string.IsNullOrWhiteSpace(title) ? itemId : title) + "."
+                : description;
+
             try
             {
                 if (itemDb == null)
@@ -214,6 +221,39 @@ namespace SolastaExpandedEquipmentMod
                 ItemDefinition existing = itemDb.GetElement(itemId, true);
                 if (existing != null)
                 {
+                    // Repair a definition left behind by an earlier registration pass.
+                    // This also covers a null GuiPresentation, not only a null Description.
+                    if (existing.GuiPresentation == null ||
+                        string.IsNullOrWhiteSpace(existing.GuiPresentation.Description))
+                    {
+                        GuiPresentation repairedPresentation;
+                        if (existing.GuiPresentation != null)
+                        {
+                            repairedPresentation = new GuiPresentation(existing.GuiPresentation);
+                        }
+                        else
+                        {
+                            ItemDefinition repairAppearance = itemDb.GetElement(appearanceSourceId, true);
+                            if (repairAppearance == null || repairAppearance.GuiPresentation == null)
+                            {
+                                Debug.LogError(LogPrefix + "Could not repair the missing GUI presentation for " + title + ".");
+                                return false;
+                            }
+
+                            repairedPresentation = new GuiPresentation(repairAppearance.GuiPresentation);
+                        }
+
+                        repairedPresentation.Title = title;
+                        repairedPresentation.Description = safeDescription;
+                        if (!SetMember(existing, "guiPresentation", repairedPresentation))
+                        {
+                            Debug.LogError(LogPrefix + "Could not assign a safe GUI description to existing armor " + title + ".");
+                            return false;
+                        }
+
+                        Debug.Log(LogPrefix + "Repaired missing GUI description for existing armor " + title + ".");
+                    }
+
                     if (!SetMember(existing, "requiresAttunement", requiresAttunement))
                         return false;
 
@@ -271,7 +311,7 @@ namespace SolastaExpandedEquipmentMod
 
                 GuiPresentation presentation = new GuiPresentation(appearanceSource.GuiPresentation);
                 presentation.Title = title;
-                presentation.Description = description;
+                presentation.Description = safeDescription;
                 SetMember(item, "guiPresentation", presentation);
 
                 ItemPresentation itemPresentation = new ItemPresentation(appearanceSource.ItemPresentation);
@@ -572,6 +612,11 @@ namespace SolastaExpandedEquipmentMod
                     return "While worn, increases Wisdom by 1.";
                 return "While worn, increases Intelligence by 1.";
             }
+            if (itemId.IndexOf("DexterityAndStrength", StringComparison.Ordinal) >= 0)
+                return "While worn, increases Dexterity by 3 and Strength by 1.";
+            if (itemId.StartsWith("LeatherPlus", StringComparison.Ordinal) &&
+                itemId.IndexOf("Dexterity", StringComparison.Ordinal) >= 0)
+                return "While worn, increases Dexterity by the enhancement bonus shown in the item name.";
             if (title != null && title.IndexOf("Protection", StringComparison.Ordinal) >= 0)
                 return "While worn, grants its listed defensive bonus.";
             return null;
@@ -581,18 +626,80 @@ namespace SolastaExpandedEquipmentMod
         {
             Database<T> database = DatabaseRepository.GetDatabase<T>();
             if (database == null)
+            {
+                Debug.LogError(LogPrefix + "Feature database unavailable for " + id + ".");
                 return null;
+            }
+
             T feature = database.GetElement(id, true);
             if (feature != null)
-                return feature;
+            {
+                // Repair an existing custom feature if an earlier registration pass
+                // left it without the GUI text that Unfinished Business expects.
+                return EnsureFeaturePresentation(feature, database, id) ? feature : null;
+            }
+
             feature = ScriptableObject.CreateInstance<T>();
             if (feature == null)
                 return null;
+
             feature.ForceName(id);
             feature.SetUserContentGUID(Guid.NewGuid().ToString());
             feature.IsUserContent = true;
+
+            // Feature definitions are visible to Unfinished Business as soon as they
+            // enter their database. Give them a valid presentation BEFORE adding them.
+            if (!EnsureFeaturePresentation(feature, database, id))
+            {
+                UnityEngine.Object.Destroy(feature);
+                return null;
+            }
+
             database.Add(feature);
-            return database.GetElement(id, true) ?? feature;
+            T registered = database.GetElement(id, true);
+            return registered ?? feature;
+        }
+
+        private static bool EnsureFeaturePresentation<T>(T feature, Database<T> database, string id)
+            where T : FeatureDefinition
+        {
+            if (feature == null || database == null)
+                return false;
+
+            GuiPresentation current = feature.GuiPresentation;
+            if (current != null && !string.IsNullOrEmpty(current.Description))
+                return true;
+
+            T template = null;
+            foreach (T candidate in database.GetAllElements())
+            {
+                if (candidate == null || object.ReferenceEquals(candidate, feature) || candidate.GuiPresentation == null ||
+                    string.IsNullOrEmpty(candidate.GuiPresentation.Description))
+                    continue;
+
+                template = candidate;
+                break;
+            }
+
+            if (template == null)
+            {
+                Debug.LogError(LogPrefix + "Could not create a GUI presentation for feature " + id +
+                    ": no existing feature of type " + typeof(T).Name + " has a non-empty description.");
+                return false;
+            }
+
+            GuiPresentation presentation = new GuiPresentation(template.GuiPresentation);
+            presentation.Title = id;
+            presentation.Description = "Custom equipment feature used by Solasta Expanded Equipment: " + id + ".";
+
+            if (!SetMember(feature, "guiPresentation", presentation))
+            {
+                Debug.LogError(LogPrefix + "Could not assign the GUI presentation to feature " + id + ".");
+                return false;
+            }
+
+            Debug.Log(LogPrefix + "Created feature " + id + " with a non-empty GUI description.");
+            return true;
         }
 
         private static ItemPropertyDescription FindPropertyTemplate(Database<ItemDefinition> itemDb)

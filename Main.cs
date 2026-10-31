@@ -21,6 +21,7 @@ namespace SolastaExpandedEquipmentMod
             SpellSlotRingPatch.Initialize();
             ArmorDailyLootPatch.Initialize();
             ArmorDamageReductionDiagnostic.Initialize();
+            ActiveEquipmentBonusesTooltip.Initialize();
             entry.OnUpdate = OnUpdate;
 
             // Initialize the armor registration system.

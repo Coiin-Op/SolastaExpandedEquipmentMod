@@ -16,21 +16,61 @@ namespace SolastaExpandedEquipmentMod
 
         public static bool Register()
         {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            if (itemDb == null)
+            {
+                Debug.LogError(LogPrefix + "Boot registration failed: item database unavailable.");
+                return false;
+            }
+
+            bool greaterSpeed = RegisterGreaterBootsOfSpeed(itemDb);
+            bool dimensionDoor = RegisterDailySpellBoots(itemDb,
+                "BootsOfDimensionDoor", "Boots of Dimension Door", "DimensionDoor", 2,
+                "Cast Dimension Door twice per day. Recharges at dawn.", "VeryRare");
+            bool blurry = RegisterDailySpellBoots(itemDb,
+                "BlurryBoots", "Blurry Boots", "Blur", 1,
+                "Cast Blur once per day. Recharges at dawn.", "Rare");
+            bool jumping = RegisterDailySpellBoots(itemDb,
+                "JumpingBoots", "Jumping Boots", "Jump", 2,
+                "Cast Jump twice per day. Recharges at dawn.", "Uncommon");
+            bool freedom = RegisterFreedomBoots(itemDb);
+
+            Debug.Log(LogPrefix + "Boot registration results: Greater Boots of Speed=" + greaterSpeed +
+                ", Dimension Door=" + dimensionDoor + ", Blur=" + blurry +
+                ", Jump=" + jumping + ", Freedom=" + freedom + ".");
+
+            return greaterSpeed && dimensionDoor && blurry && jumping && freedom;
+        }
+
+        private static bool RegisterGreaterBootsOfSpeed(Database<ItemDefinition> itemDb)
+        {
             const string itemId = "GreaterBootsOfSpeed";
             const string displayName = "Greater Boots of Speed";
 
             try
             {
-                Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+
                 if (itemDb == null)
                 {
                     Debug.LogError(LogPrefix + "Greater Boots of Speed registration failed: item database unavailable.");
                     return false;
                 }
 
-                if (itemDb.GetElement(itemId, true) != null)
+                ItemDefinition existingItem = itemDb.GetElement(itemId, true);
+                if (existingItem != null)
                 {
-                    Debug.Log(LogPrefix + displayName + " already exists; skipping.");
+                    if (existingItem.GuiPresentation != null)
+                    {
+                        GuiPresentation existingPresentation =
+                            new GuiPresentation(existingItem.GuiPresentation);
+
+                        existingPresentation.Title = displayName;
+                        existingPresentation.Description = "Grants the effects of Haste permanently while worn. You gain double walking speed, +2 AC, advantage on Dexterity saving throws, and one additional restricted action each turn.";
+
+                        SetMember(existingItem, "guiPresentation", existingPresentation);
+                    }
+
+                    Debug.Log(LogPrefix + displayName + " already exists; description refreshed.");
                     return true;
                 }
 
@@ -105,6 +145,149 @@ namespace SolastaExpandedEquipmentMod
             catch (Exception ex)
             {
                 Debug.LogError(LogPrefix + "Failed to register Greater Boots of Speed: " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterDailySpellBoots(
+            Database<ItemDefinition> itemDb,
+            string itemId,
+            string displayName,
+            string spellId,
+            int usesPerDay,
+            string description,
+            string rarity)
+        {
+            try
+            {
+                if (itemDb.GetElement(itemId, true) != null)
+                {
+                    Debug.Log(LogPrefix + displayName + " already exists; skipping.");
+                    return true;
+                }
+
+                ItemDefinition template = itemDb.GetElement("BootsOfStridingAndSpringing", true);
+                Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+                SpellDefinition spell = spellDb == null ? null : spellDb.GetElement(spellId, true);
+                if (template == null || template.GuiPresentation == null || spell == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not find the boots template or spell '" + spellId + "' for " + displayName + ".");
+                    return false;
+                }
+
+                List<KeyValuePair<SpellDefinition, int>> spellUses =
+                    new List<KeyValuePair<SpellDefinition, int>>();
+                spellUses.Add(new KeyValuePair<SpellDefinition, int>(spell, usesPerDay));
+
+                UsableDeviceDescription device =
+                    RingItems.CreateSpellFunctionsByRecharge(itemDb, spellUses);
+                if (device == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not create daily spell function for " + displayName + ".");
+                    return false;
+                }
+
+                ItemDefinition item = UnityEngine.Object.Instantiate(template);
+                if (item == null)
+                    return false;
+
+                item.ForceName(itemId);
+                item.SetUserContentGUID(Guid.NewGuid().ToString());
+                item.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(template.GuiPresentation);
+                presentation.Title = displayName;
+                presentation.Description = description;
+                SetMember(item, "guiPresentation", presentation);
+                SetMember(item, "magical", true);
+                SetMember(item, "requiresAttunement", true);
+                SetMember(item, "requiresIdentification", false);
+                SetEnumMember(item, "itemRarity", rarity);
+                SetMember(item, "staticProperties", new List<ItemPropertyDescription>());
+                SetMember(item, "usableDeviceDescription", device);
+                SetMember(item, "isUsableDevice", true);
+
+                itemDb.Add(item);
+                bool registered = itemDb.GetElement(itemId, true) != null;
+                if (registered)
+                    Debug.Log(LogPrefix + "Registered " + displayName + " with " + usesPerDay + " daily use(s), recharging at dawn.");
+                else
+                    Debug.LogError(LogPrefix + "Registration verification failed for " + displayName + ".");
+                return registered;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Failed to register " + displayName + ": " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterFreedomBoots(Database<ItemDefinition> itemDb)
+        {
+            const string itemId = "FreedomBoots";
+            const string displayName = "Freedom Boots";
+
+            try
+            {
+                if (itemDb.GetElement(itemId, true) != null)
+                {
+                    Debug.Log(LogPrefix + displayName + " already exists; skipping.");
+                    return true;
+                }
+
+                ItemDefinition template = itemDb.GetElement("BootsOfStridingAndSpringing", true);
+                ItemDefinition freeMovementRing = itemDb.GetElement("RingOfFreeMovement", true);
+                if (template == null || template.GuiPresentation == null ||
+                    freeMovementRing == null || freeMovementRing.StaticProperties == null ||
+                    freeMovementRing.StaticProperties.Count == 0)
+                {
+                    Debug.LogError(LogPrefix + "Could not find the boots template or registered Ring of Free Movement features for " + displayName + ".");
+                    return false;
+                }
+
+                ItemDefinition item = UnityEngine.Object.Instantiate(template);
+                if (item == null)
+                    return false;
+
+                item.ForceName(itemId);
+                item.SetUserContentGUID(Guid.NewGuid().ToString());
+                item.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(template.GuiPresentation);
+                presentation.Title = displayName;
+                presentation.Description = "Grants Freedom of Movement while worn.";
+                SetMember(item, "guiPresentation", presentation);
+                SetMember(item, "magical", true);
+                SetMember(item, "requiresAttunement", true);
+                SetMember(item, "requiresIdentification", false);
+                SetEnumMember(item, "itemRarity", "Rare");
+                SetMember(item, "isUsableDevice", false);
+                SetMember(item, "usableDeviceDescription", null);
+
+                List<ItemPropertyDescription> properties = new List<ItemPropertyDescription>();
+                foreach (ItemPropertyDescription source in freeMovementRing.StaticProperties)
+                {
+                    if (source != null)
+                        properties.Add(new ItemPropertyDescription(source));
+                }
+
+                if (!SetMember(item, "staticProperties", properties))
+                {
+                    Debug.LogError(LogPrefix + "Could not attach Freedom of Movement features to " + displayName + ".");
+                    return false;
+                }
+
+                itemDb.Add(item);
+                bool registered = itemDb.GetElement(itemId, true) != null;
+                if (registered)
+                    Debug.Log(LogPrefix + "Registered " + displayName + " with permanent Freedom of Movement features.");
+                else
+                    Debug.LogError(LogPrefix + "Registration verification failed for " + displayName + ".");
+                return registered;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Failed to register " + displayName + ": " + ex);
                 return false;
             }
         }
