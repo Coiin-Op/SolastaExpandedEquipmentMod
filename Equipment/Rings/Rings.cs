@@ -40,12 +40,238 @@ namespace SolastaExpandedEquipmentMod
 
             bool slotRings = RingSlotItems.Register(itemDb);
             bool spellWands = RegisterSpellWands(itemDb);
+            bool additionalRings = RegisterAdditionalRings(itemDb);
 
             Debug.Log(LogPrefix + "Ring registration results: Free Movement=" + freeMovement +
                 ", Knock=" + knock + ", Invisibility=" + invisibility +
-                ", Spell-slot rings=" + slotRings + ", Wands=" + spellWands + ".");
+                ", Spell-slot rings=" + slotRings + ", Wands=" + spellWands +
+                ", Additional rings=" + additionalRings + ".");
 
-            return freeMovement && knock && invisibility && slotRings && spellWands;
+            return freeMovement && knock && invisibility && slotRings && spellWands && additionalRings;
+        }
+
+        private static bool RegisterAdditionalRings(Database<ItemDefinition> itemDb)
+        {
+            bool success = true;
+            success &= RegisterDailySpellRing(itemDb, "RingOfJump", "Ring of Jump", "Uncommon",
+                new[] { "Jump" }, "Jump", 3);
+            success &= RegisterDailySpellRing(itemDb, "RingOfDarkness", "Ring of Darkness", "Rare",
+                new[] { "Darkness", "Darkvision" }, "Darkness and Darkvision", 3);
+            success &= RegisterDailySpellRing(itemDb, "RingOfSilence", "Ring of Silence", "Uncommon",
+                new[] { "Silence" }, "Silence", 3);
+            success &= RegisterDailySpellRing(itemDb, "RingOfSpiderClimbing", "Ring of Spider Climbing", "Rare",
+                new[] { "SpiderClimb" }, "Spider Climb", 3);
+            success &= RegisterDailySpellRing(itemDb, "RingOfDispelMagic", "Ring of Dispel Magic", "Rare",
+                new[] { "DispelMagic" }, "Dispel Magic", 3);
+            success &= RegisterSpellResistanceRing(itemDb);
+
+            success &= RegisterElementalRing(itemDb, "RingOfTheFireElemental", "Ring of the Fire Elemental",
+                "Fire", new[] { "SummonFireElemental", "ConjureFireElemental", "ConjureElementalFire" });
+            success &= RegisterElementalRing(itemDb, "RingOfTheAirElemental", "Ring of the Air Elemental",
+                "Air", new[] { "SummonAirElemental", "ConjureAirElemental", "ConjureElementalAir" });
+            success &= RegisterElementalRing(itemDb, "RingOfTheEarthElemental", "Ring of the Earth Elemental",
+                "Earth", new[] { "SummonEarthElemental", "ConjureEarthElemental", "ConjureElementalEarth" });
+            success &= RegisterElementalRing(itemDb, "RingOfTheWaterElemental", "Ring of the Water Elemental",
+                "Water", new[] { "SummonWaterElemental", "ConjureWaterElemental", "ConjureElementalWater" });
+            return success;
+        }
+
+        private static bool RegisterDailySpellRing(
+            Database<ItemDefinition> itemDb, string itemId, string title, string rarity,
+            string[] spellIds, string spellNames, int uses)
+        {
+            if (itemDb.GetElement(itemId, true) != null)
+                return true;
+
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            if (spellDb == null)
+                return false;
+
+            List<KeyValuePair<SpellDefinition, int>> spellUses = new List<KeyValuePair<SpellDefinition, int>>();
+            foreach (string spellId in spellIds)
+            {
+                SpellDefinition spell = FindSpell(spellDb, spellId, null);
+                if (spell == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not find spell '" + spellId + "' for " + title + ".");
+                    return false;
+                }
+                spellUses.Add(new KeyValuePair<SpellDefinition, int>(spell, uses));
+            }
+
+            return RegisterDailySpellRing(itemDb, itemId, title, rarity,
+                "A magical ring that lets its wearer cast " + spellNames + " " + uses + " times per day. It recharges at dawn.",
+                spellUses);
+        }
+
+        private static bool RegisterElementalRing(
+            Database<ItemDefinition> itemDb, string itemId, string title, string element, string[] spellIds)
+        {
+            if (itemDb.GetElement(itemId, true) != null)
+                return true;
+
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            SpellDefinition spell = null;
+            foreach (string spellId in spellIds)
+            {
+                spell = FindSpell(spellDb, spellId, null);
+                if (spell != null)
+                    break;
+            }
+            if (spell == null)
+                spell = FindElementalSummoningSpell(spellDb, element);
+
+            if (spell == null)
+            {
+                Debug.LogError(LogPrefix + "Could not find a " + element + " elemental summoning spell for " + title + ".");
+                return false;
+            }
+
+            return RegisterDailySpellRing(itemDb, itemId, title, "VeryRare",
+                "Summons a " + element.ToLowerInvariant() + " elemental twice per day. Recharges at dawn.",
+                new List<KeyValuePair<SpellDefinition, int>>
+                {
+                    new KeyValuePair<SpellDefinition, int>(spell, 2)
+                });
+        }
+
+        private static SpellDefinition FindSpell(
+            Database<SpellDefinition> spellDb, string spellId, string titleFragment)
+        {
+            if (spellDb == null)
+                return null;
+
+            SpellDefinition exact = spellDb.GetElement(spellId, true);
+            if (exact != null)
+                return exact;
+
+            if (string.IsNullOrEmpty(titleFragment))
+                return null;
+
+            foreach (SpellDefinition candidate in spellDb.GetAllElements())
+            {
+                string id = candidate == null ? string.Empty : candidate.Name ?? string.Empty;
+                string title = candidate == null || candidate.GuiPresentation == null
+                    ? string.Empty : candidate.GuiPresentation.Title ?? string.Empty;
+                if (id.IndexOf(titleFragment, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    title.IndexOf(titleFragment, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        private static SpellDefinition FindElementalSummoningSpell(
+            Database<SpellDefinition> spellDb, string element)
+        {
+            if (spellDb == null)
+                return null;
+
+            foreach (SpellDefinition candidate in spellDb.GetAllElements())
+            {
+                if (candidate == null || candidate.GuiPresentation == null)
+                    continue;
+
+                string id = candidate.Name ?? string.Empty;
+                string title = candidate.GuiPresentation.Title ?? string.Empty;
+                string combined = id + " " + title;
+                bool matchingElement = combined.IndexOf(element, StringComparison.OrdinalIgnoreCase) >= 0;
+                bool elementalSummon = combined.IndexOf("elemental", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    (combined.IndexOf("summon", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     combined.IndexOf("conjure", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (matchingElement && elementalSummon)
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        private static bool RegisterDailySpellRing(
+            Database<ItemDefinition> itemDb, string itemId, string title, string rarity,
+            string description, List<KeyValuePair<SpellDefinition, int>> spellUses)
+        {
+            try
+            {
+                if (itemDb.GetElement(itemId, true) != null)
+                    return true;
+
+                ItemDefinition template = FindItemTemplate(itemDb, "RingOfTheLightbringers", "FingerSlot", true);
+                UsableDeviceDescription device = CreateSpellFunctionsByRecharge(itemDb, spellUses);
+                if (template == null || device == null)
+                    return false;
+
+                ItemDefinition item = UnityEngine.Object.Instantiate(template);
+                if (item == null)
+                    return false;
+                item.ForceName(itemId);
+                item.SetUserContentGUID(Guid.NewGuid().ToString());
+                item.IsUserContent = true;
+                SetPresentation(item, template, title, description);
+                SetMember(item, "magical", true);
+                SetMember(item, "requiresAttunement", true);
+                SetEnumMember(item, "itemRarity", rarity);
+                SetMember(item, "staticProperties", new List<ItemPropertyDescription>());
+                SetMember(item, "usableDeviceDescription", device);
+                SetMember(item, "isUsableDevice", true);
+                itemDb.Add(item);
+                return itemDb.GetElement(itemId, true) != null;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Failed to register " + title + ": " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterSpellResistanceRing(Database<ItemDefinition> itemDb)
+        {
+            const string itemId = "RingOfSpellResistance";
+            const string title = "Ring of Spell Resistance";
+            if (itemDb.GetElement(itemId, true) != null)
+                return true;
+
+            ItemDefinition mantle = itemDb.GetElement("MantleOfSpellResistance", true);
+            if (mantle == null)
+            {
+                foreach (ItemDefinition candidate in itemDb.GetAllElements())
+                {
+                    string candidateTitle = candidate == null || candidate.GuiPresentation == null
+                        ? string.Empty : candidate.GuiPresentation.Title ?? string.Empty;
+                    if (candidateTitle.IndexOf("Mantle of Spell Resistance", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        mantle = candidate;
+                        break;
+                    }
+                }
+            }
+
+            ItemDefinition template = FindItemTemplate(itemDb, "RingDarkvision", "FingerSlot", false);
+            if (mantle == null || mantle.StaticProperties == null || mantle.StaticProperties.Count == 0 || template == null)
+            {
+                Debug.LogError(LogPrefix + "Could not copy the spell-resistance feature to " + title + ".");
+                return false;
+            }
+
+            ItemDefinition item = UnityEngine.Object.Instantiate(template);
+            if (item == null)
+                return false;
+            item.ForceName(itemId);
+            item.SetUserContentGUID(Guid.NewGuid().ToString());
+            item.IsUserContent = true;
+            SetPresentation(item, template, title,
+                "Grants the same protection from spells as the Mantle of Spell Resistance.");
+            SetMember(item, "magical", true);
+            SetMember(item, "requiresAttunement", true);
+            SetEnumMember(item, "itemRarity", "VeryRare");
+            List<ItemPropertyDescription> properties = new List<ItemPropertyDescription>();
+            foreach (ItemPropertyDescription sourceProperty in mantle.StaticProperties)
+                if (sourceProperty != null)
+                    properties.Add(new ItemPropertyDescription(sourceProperty));
+            SetMember(item, "staticProperties", properties);
+            SetMember(item, "isUsableDevice", false);
+            SetMember(item, "usableDeviceDescription", null);
+            itemDb.Add(item);
+            return itemDb.GetElement(itemId, true) != null;
         }
 
         private static bool RegisterFreeMovement(Database<ItemDefinition> itemDb)
@@ -384,6 +610,62 @@ namespace SolastaExpandedEquipmentMod
 
                 device.DeviceFunctions.Add(function);
             }
+
+            return device;
+        }
+
+        internal static UsableDeviceDescription CreateSpellFunctionsByCharges(
+            Database<ItemDefinition> itemDb,
+            List<KeyValuePair<SpellDefinition, int>> spellCosts,
+            int chargePool)
+        {
+            if (spellCosts == null || spellCosts.Count == 0 || chargePool < 1)
+                return null;
+
+            ItemDefinition template = FindWandTemplate(itemDb);
+            UsableDeviceDescription baseDescription = template == null ? null : template.UsableDeviceDescription;
+            if (baseDescription == null || baseDescription.DeviceFunctions == null || baseDescription.DeviceFunctions.Count == 0)
+                return null;
+
+            UsableDeviceDescription device = new UsableDeviceDescription(baseDescription);
+            device.DeviceFunctions.Clear();
+            DeviceFunctionDescription functionTemplate = baseDescription.DeviceFunctions[0];
+
+            foreach (KeyValuePair<SpellDefinition, int> spellCost in spellCosts)
+            {
+                if (spellCost.Key == null || spellCost.Value < 1 || spellCost.Value > chargePool)
+                    return null;
+
+                DeviceFunctionDescription function = new DeviceFunctionDescription(functionTemplate);
+                bool typeSet = SetEnumMember(function, "type", "Spell");
+                bool spellSet = SetMember(function, "spellDefinition", spellCost.Key);
+                bool powerCleared = SetMember(function, "featureDefinitionPower", null);
+                bool parentUsageSet = SetEnumMember(function, "parentUsage", "Charges");
+                bool usesSet = SetMember(function, "useAmount", spellCost.Value);
+                bool affinitySet = SetEnumMember(function, "useAffinity", "ChargeCost");
+                bool rechargeSet = SetEnumMember(function, "rechargeRate", "Dawn");
+                bool durationSet = SetMember(function, "durationType", spellCost.Key.EffectDescription.DurationType);
+                bool overchargeSet = SetMember(function, "canOverchargeSpell", false);
+                if (!typeSet || !spellSet || !powerCleared || !parentUsageSet || !usesSet ||
+                    !affinitySet || !rechargeSet || !durationSet || !overchargeSet)
+                    return null;
+
+                device.DeviceFunctions.Add(function);
+            }
+
+            bool usageSet = SetEnumMember(device, "usage", "Charges");
+            bool capitalSet = SetEnumMember(device, "chargesCapital", "Fixed");
+            bool capitalNumberSet = SetMember(device, "chargesCapitalNumber", chargePool);
+            bool capitalDieSet = SetEnumMember(device, "chargesCapitalDie", "D1");
+            bool capitalBonusSet = SetMember(device, "chargesCapitalBonus", 0);
+            bool rechargeSetDevice = SetEnumMember(device, "rechargeRate", "Dawn");
+            bool rechargeNumberSet = SetMember(device, "rechargeNumber", chargePool);
+            bool rechargeDieSet = SetEnumMember(device, "rechargeDie", "D1");
+            bool rechargeBonusSet = SetMember(device, "rechargeBonus", 0);
+            bool outOfChargesSet = SetEnumMember(device, "outOfChargesConsequence", "Persist");
+            if (!usageSet || !capitalSet || !capitalNumberSet || !capitalDieSet || !capitalBonusSet ||
+                !rechargeSetDevice || !rechargeNumberSet || !rechargeDieSet || !rechargeBonusSet || !outOfChargesSet)
+                return null;
 
             return device;
         }

@@ -9,11 +9,15 @@ namespace SolastaExpandedEquipmentMod
         private static bool weaponsRegistered;
         private static bool ringsRegistered;
         private static bool bootsRegistered;
+        private static bool stavesRegistered;
+        private static bool ammunitionRegistered;
 
         private static bool armorFailureReported;
         private static bool weaponsFailureReported;
         private static bool ringsFailureReported;
         private static bool bootsFailureReported;
+        private static bool stavesFailureReported;
+        private static bool ammunitionFailureReported;
 
         public static bool RegisterAll()
         {
@@ -33,7 +37,20 @@ namespace SolastaExpandedEquipmentMod
                 "Boots", bootsRegistered, ref bootsFailureReported,
                 () => BootsItems.Register());
 
-            return armorRegistered && weaponsRegistered && ringsRegistered && bootsRegistered;
+            stavesRegistered = RegisterCategory(
+                "Staves", stavesRegistered, ref stavesFailureReported,
+                () => StaffItems.Register());
+
+            ammunitionRegistered = RegisterCategory(
+                "Arrows and bolts", ammunitionRegistered, ref ammunitionFailureReported,
+                () => AmmunitionItems.RegisterArrowsAndBolts());
+
+            return armorRegistered &&
+                   weaponsRegistered &&
+                   ringsRegistered &&
+                   bootsRegistered &&
+                   stavesRegistered &&
+                   ammunitionRegistered;
         }
 
         private static bool RegisterCategory(
@@ -48,19 +65,26 @@ namespace SolastaExpandedEquipmentMod
             try
             {
                 bool success = register();
+
                 if (success)
                 {
                     failureReported = false;
+
                     Debug.Log(
-                        "[Solasta Expanded Equipment] " + categoryName + " registration succeeded.");
+                        "[Solasta Expanded Equipment] " +
+                        categoryName + " registration succeeded.");
+
                     return true;
                 }
 
                 if (!failureReported)
                 {
                     Debug.LogWarning(
-                        "[Solasta Expanded Equipment] " + categoryName +
-                        " registration returned failure; other categories will continue.");
+                        "[Solasta Expanded Equipment] " +
+                        categoryName +
+                        " registration returned failure; " +
+                        "other categories will continue.");
+
                     failureReported = true;
                 }
             }
@@ -69,8 +93,10 @@ namespace SolastaExpandedEquipmentMod
                 if (!failureReported)
                 {
                     Debug.LogError(
-                        "[Solasta Expanded Equipment] " + categoryName +
+                        "[Solasta Expanded Equipment] " +
+                        categoryName +
                         " registration threw an exception: " + ex);
+
                     failureReported = true;
                 }
             }

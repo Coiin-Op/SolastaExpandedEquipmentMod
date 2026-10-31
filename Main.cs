@@ -17,8 +17,10 @@ namespace SolastaExpandedEquipmentMod
             mod = entry;
             CombatDiagnostic.Initialize();
             BeastSlayerCombatPatch.Initialize();
+            AmmunitionEffectProxyPatch.Initialize();
             SpellSlotRingPatch.Initialize();
             ArmorDailyLootPatch.Initialize();
+            ArmorDamageReductionDiagnostic.Initialize();
             entry.OnUpdate = OnUpdate;
 
             // Initialize the armor registration system.

@@ -83,11 +83,13 @@ namespace SolastaExpandedEquipmentMod
             List<FeatureDefinition> features,
             string armorSourceId = "ClothesWizard",
             string appearanceSourceId = "ClothesWizard",
-            int armorClassBase = 12)
+            int armorClassBase = 12,
+            bool requiresAttunement = true)
         {
             return RegisterVariant(itemDb, itemId, title, tier, rarity,
                 GetPassiveDescription(itemId, title), features, null, null, 0,
-                armorSourceId, appearanceSourceId, armorClassBase);
+                armorSourceId, appearanceSourceId, armorClassBase,
+                null, false, requiresAttunement);
         }
 
         private static bool RegisterSpellVariant(
@@ -201,7 +203,8 @@ namespace SolastaExpandedEquipmentMod
             string appearanceSourceId = "ClothesWizard",
             int armorClassBase = 12,
             UsableDeviceDescription deviceDescription = null,
-            bool expectsSpellFunction = false)
+            bool expectsSpellFunction = false,
+            bool requiresAttunement = true)
         {
             try
             {
@@ -211,6 +214,14 @@ namespace SolastaExpandedEquipmentMod
                 ItemDefinition existing = itemDb.GetElement(itemId, true);
                 if (existing != null)
                 {
+                    if (!SetMember(existing, "requiresAttunement", requiresAttunement))
+                        return false;
+
+                    if ((string.Equals(itemId, "WarlocksArmorPlus1OfDeepPockets", StringComparison.Ordinal) ||
+                         string.Equals(itemId, "WarlocksArmorPlus2OfDeepestPockets", StringComparison.Ordinal)) &&
+                        !SetMember(existing, "staticProperties", new List<ItemPropertyDescription>()))
+                        return false;
+
                     if (deviceDescription != null && !existing.IsUsableDevice)
                     {
                         if (!SetMember(existing, "usableDeviceDescription", deviceDescription) ||
@@ -264,11 +275,56 @@ namespace SolastaExpandedEquipmentMod
                 SetMember(item, "guiPresentation", presentation);
 
                 ItemPresentation itemPresentation = new ItemPresentation(appearanceSource.ItemPresentation);
-                if (appearanceSourceId == "ClothesWizard")
+                if (appearanceSourceId == "ClothesWizard" ||
+                    appearanceSourceId == "LeatherDruid" ||
+                    appearanceSourceId == "Warlock_Armor" ||
+                    appearanceSourceId == "SorcererArmor")
                 {
                     SetMember(itemPresentation, "useArmorAddressableName", true);
-                    SetMember(itemPresentation, "armorAddressableName", "ClothesWizard");
+                    SetMember(itemPresentation, "armorAddressableName", appearanceSourceId);
                     SetMember(itemPresentation, "isArmorAddressableNameGenderSpecific", false);
+                }
+                else if (string.Equals(source.ArmorDescription.ArmorType, "PlateType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "PlateArmorType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         (source.Name != null && source.Name.IndexOf("Plate", StringComparison.OrdinalIgnoreCase) >= 0) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "HalfPlateType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "BreastPlateType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "ChainMailType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "ChainShirtType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "ScaleMailType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "HideArmorType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "StuddedLeatherType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "LeatherType",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(source.ArmorDescription.ArmorType, "PaddedLeatherType",
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    // Custom armor definitions have new item IDs, so the character
+                    // equipment renderer cannot infer the vanilla model from the enchanted
+                    // item's name. Preserve an explicit mapping from the base definition;
+                    // only synthesize one when the base definition relies on its own ID.
+                    bool hasGenderSpecificAddressables =
+                        itemPresentation.IsArmorAddressableNameGenderSpecific &&
+                        (!string.IsNullOrEmpty(itemPresentation.MaleArmorAddressableName) ||
+                         !string.IsNullOrEmpty(itemPresentation.FemaleArmorAddressableName));
+                    bool hasSharedAddressable = !itemPresentation.IsArmorAddressableNameGenderSpecific &&
+                        !string.IsNullOrEmpty(itemPresentation.ArmorAddressableName);
+                    if (!itemPresentation.UseArmorAddressableName ||
+                        (!hasSharedAddressable && !hasGenderSpecificAddressables))
+                    {
+                        SetMember(itemPresentation, "useArmorAddressableName", true);
+                        SetMember(itemPresentation, "armorAddressableName", appearanceSource.Name);
+                        SetMember(itemPresentation, "isArmorAddressableNameGenderSpecific", false);
+                    }
                 }
                 SetMember(item, "itemPresentation", itemPresentation);
 
@@ -276,7 +332,7 @@ namespace SolastaExpandedEquipmentMod
                 SetMember(armor, "armorClassValue", armorClassBase + tier);
                 SetMember(item, "armorDefinition", armor);
                 SetMember(item, "magical", true);
-                SetMember(item, "requiresAttunement", true);
+                SetMember(item, "requiresAttunement", requiresAttunement);
                 SetEnumMember(item, "itemRarity", rarity);
 
                 ItemPropertyDescription propertyTemplate = FindPropertyTemplate(itemDb);
@@ -376,10 +432,25 @@ namespace SolastaExpandedEquipmentMod
             FeatureDefinitionDamageAffinity feature = CreateFeature<FeatureDefinitionDamageAffinity>(id);
             if (feature == null)
                 return null;
-            SetMember(feature, "damageType", damageType);
-            SetEnumMember(feature, "damageAffinityType", "None");
-            SetMember(feature, "flatDamageReduction", reduction);
-            SetMember(feature, "flatDamageReductionOnlyAppliesToFirstDamageForm", true);
+
+            // Flat reduction is independent of resistance/vulnerability. Verify every
+            // backing member so a missing or renamed game API member cannot silently
+            // produce an enchantment that registers but does nothing.
+            bool configured =
+                SetMember(feature, "damageType", damageType) &&
+                SetEnumMember(feature, "damageAffinityType", "Reduction") &&
+                SetMember(feature, "flatDamageReduction", reduction) &&
+                SetMember(feature, "flatDamageReductionOnlyAppliesToFirstDamageForm", false);
+
+            if (!configured)
+            {
+                Debug.LogError(LogPrefix + "Could not configure flat damage reduction feature " +
+                    id + " (damage type=" + damageType + ", reduction=" + reduction + ").");
+                return null;
+            }
+
+            Debug.Log(LogPrefix + "Configured flat damage reduction " + id +
+                " | DamageType=" + damageType + " | Reduction=" + reduction + ".");
             return feature;
         }
 
@@ -398,7 +469,13 @@ namespace SolastaExpandedEquipmentMod
             FeatureDefinitionEquipmentAffinity feature = CreateFeature<FeatureDefinitionEquipmentAffinity>(id);
             if (feature == null)
                 return null;
-            SetMember(feature, "carryingCapacityMultiplier", multiplier);
+            if (!SetMember(feature, "carryingCapacityMultiplier", multiplier) ||
+                Math.Abs(feature.CarryingCapacityMultiplier - multiplier) > 0.001f)
+            {
+                Debug.LogError(LogPrefix + "Could not set carrying-capacity multiplier " + multiplier +
+                    " on " + id + ".");
+                return null;
+            }
             return feature;
         }
 
@@ -447,6 +524,8 @@ namespace SolastaExpandedEquipmentMod
 
         private static string GetPassiveDescription(string itemId, string title)
         {
+            if (itemId.IndexOf("OfArchery", StringComparison.Ordinal) >= 0)
+                return "While worn, grants proficiency with longbows and shortbows.";
             if (itemId.IndexOf("OfProtection", StringComparison.Ordinal) >= 0)
                 return "While worn, grants its enhancement bonus to armor class and all saving throws.";
             if (itemId.IndexOf("OfStrength", StringComparison.Ordinal) >= 0)
@@ -473,8 +552,26 @@ namespace SolastaExpandedEquipmentMod
                 return itemId.IndexOf("Plus1", StringComparison.Ordinal) >= 0
                     ? "While worn, grants 2 additional 1st-level spell slots and 1 additional 2nd-level spell slot to Wizards."
                     : "While worn, grants 2 additional 1st-level, 2 additional 2nd-level, and 1 additional 3rd-level spell slot to Wizards.";
+            if (itemId.IndexOf("OfSorcery", StringComparison.Ordinal) >= 0)
+                return itemId.IndexOf("Plus1", StringComparison.Ordinal) >= 0
+                    ? "While worn, grants 2 additional 1st-level spell slots and 1 additional 2nd-level spell slot to Sorcerers."
+                    : "While worn, grants 2 additional 1st-level, 2 additional 2nd-level, and 1 additional 3rd-level spell slot to Sorcerers.";
+            if (itemId.IndexOf("OfInfernal", StringComparison.Ordinal) >= 0)
+                return itemId.IndexOf("Plus1", StringComparison.Ordinal) >= 0
+                    ? "While worn, grants 2 additional 1st-level spell slots and 1 additional 2nd-level spell slot to Warlocks."
+                    : "While worn, grants 2 additional 1st-level, 2 additional 2nd-level, and 1 additional 3rd-level spell slot to Warlocks.";
+            if (itemId.IndexOf("OfTheDruid", StringComparison.Ordinal) >= 0)
+                return itemId.IndexOf("Plus1", StringComparison.Ordinal) >= 0
+                    ? "While worn, grants 2 additional 1st-level spell slots and 1 additional 2nd-level spell slot to Druids."
+                    : "While worn, grants 2 additional 1st-level, 2 additional 2nd-level, and 1 additional 3rd-level spell slot to Druids.";
             if (itemId.IndexOf("OfBrilliance", StringComparison.Ordinal) >= 0)
+            {
+                if (itemId.StartsWith("WarlocksArmor", StringComparison.Ordinal))
+                    return "While worn, increases Charisma by 1.";
+                if (itemId.StartsWith("DruidsArmor", StringComparison.Ordinal))
+                    return "While worn, increases Wisdom by 1.";
                 return "While worn, increases Intelligence by 1.";
+            }
             if (title != null && title.IndexOf("Protection", StringComparison.Ordinal) >= 0)
                 return "While worn, grants its listed defensive bonus.";
             return null;
