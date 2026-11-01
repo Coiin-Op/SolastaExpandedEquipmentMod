@@ -11,18 +11,36 @@ namespace SolastaExpandedEquipmentMod
         private static bool armorRegistered;
         private static bool weaponsRegistered;
         private static bool ringsRegistered;
+        private static bool wandsRegistered;
         private static bool bootsRegistered;
         private static bool glovesRegistered;
         private static bool stavesRegistered;
         private static bool ammunitionRegistered;
+        private static bool cloaksRegistered;
 
         private static bool armorFailureReported;
         private static bool weaponsFailureReported;
         private static bool ringsFailureReported;
+        private static bool wandsFailureReported;
         private static bool bootsFailureReported;
         private static bool glovesFailureReported;
         private static bool stavesFailureReported;
         private static bool ammunitionFailureReported;
+        private static bool cloaksFailureReported;
+
+        // Temporary picker-isolation switches. Rings and Wands are enabled;
+        // WandItems.cs further narrows registration to one wand at a time.
+        // Staves remain skipped. All other categories, including Cloaks, stay enabled.
+        private const bool DIAGNOSTIC_SKIP_RINGS = false;
+        private const bool DIAGNOSTIC_SKIP_WANDS = false;
+        private const bool DIAGNOSTIC_SKIP_STAVES = true;
+        private static bool ringsSkipReported;
+        private static bool wandsSkipReported;
+        private static bool stavesSkipReported;
+
+        // Avoid repeating the same diagnostic line while registration is retrying.
+        private static readonly HashSet<string> reportedPickerDefinitionProblems =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static bool RegisterAll()
         {
@@ -34,9 +52,17 @@ namespace SolastaExpandedEquipmentMod
                 "Weapons", weaponsRegistered, ref weaponsFailureReported,
                 () => WeaponRegistration.Register());
 
-            ringsRegistered = RegisterCategory(
-                "Rings and wands", ringsRegistered, ref ringsFailureReported,
-                () => RingItems.Register());
+            ringsRegistered = DIAGNOSTIC_SKIP_RINGS
+                ? ReportSkippedCategory("Rings", ref ringsSkipReported)
+                : RegisterCategory(
+                    "Rings", ringsRegistered, ref ringsFailureReported,
+                    () => RingItems.Register());
+
+            wandsRegistered = DIAGNOSTIC_SKIP_WANDS
+                ? ReportSkippedCategory("Wands", ref wandsSkipReported)
+                : RegisterCategory(
+                    "Wands", wandsRegistered, ref wandsFailureReported,
+                    () => WandItems.Register());
 
             bootsRegistered = RegisterCategory(
                 "Boots", bootsRegistered, ref bootsFailureReported,
@@ -46,21 +72,90 @@ namespace SolastaExpandedEquipmentMod
                 "Gloves", glovesRegistered, ref glovesFailureReported,
                 () => GlovesItems.Register());
 
-            stavesRegistered = RegisterCategory(
-                "Staves", stavesRegistered, ref stavesFailureReported,
-                () => StaffItems.Register());
+            stavesRegistered = DIAGNOSTIC_SKIP_STAVES
+                ? ReportSkippedCategory("Staves", ref stavesSkipReported)
+                : RegisterCategory(
+                    "Staves", stavesRegistered, ref stavesFailureReported,
+                    () => StaffItems.Register());
 
             ammunitionRegistered = RegisterCategory(
                 "Arrows and bolts", ammunitionRegistered, ref ammunitionFailureReported,
                 () => AmmunitionItems.RegisterArrowsAndBolts());
 
+            cloaksRegistered = RegisterCategory(
+                "Cloaks", cloaksRegistered, ref cloaksFailureReported,
+                () => CloaksItems.Register());
+
+            // Inspect all custom item definitions after each registration pass.
+            // This records the exact definition if an item was created without the
+            // GUI metadata that the game's item picker expects.
+            DiagnoseItemPickerDefinitions();
+
             return armorRegistered &&
                    weaponsRegistered &&
                    ringsRegistered &&
+                   wandsRegistered &&
                    bootsRegistered &&
                    glovesRegistered &&
                    stavesRegistered &&
-                   ammunitionRegistered;
+                   ammunitionRegistered &&
+                   cloaksRegistered;
+        }
+
+        private static void DiagnoseItemPickerDefinitions()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            if (itemDb == null)
+                return;
+
+            foreach (ItemDefinition item in itemDb.GetAllElements())
+            {
+                if (item == null || !item.IsUserContent)
+                    continue;
+
+                string itemId = string.IsNullOrWhiteSpace(item.Name)
+                    ? item.name
+                    : item.Name;
+
+                bool missingGui = item.GuiPresentation == null;
+                bool missingTitle = !missingGui &&
+                    string.IsNullOrWhiteSpace(item.GuiPresentation.Title);
+                bool missingDescription = !missingGui &&
+                    string.IsNullOrWhiteSpace(item.GuiPresentation.Description);
+                bool missingItemPresentation = item.ItemPresentation == null;
+
+                if (!missingGui && !missingTitle && !missingDescription && !missingItemPresentation)
+                    continue;
+
+                string issues =
+                    (missingGui ? "GuiPresentation=null; " : string.Empty) +
+                    (missingTitle ? "GuiPresentation.Title empty; " : string.Empty) +
+                    (missingDescription ? "GuiPresentation.Description empty; " : string.Empty) +
+                    (missingItemPresentation ? "ItemPresentation=null; " : string.Empty);
+
+                string diagnosticKey = itemId + "|" + issues;
+                if (reportedPickerDefinitionProblems.Add(diagnosticKey))
+                {
+                    Debug.LogError(
+                        "[Solasta Expanded Equipment][ItemPickerDiag] Suspicious user-content item: " +
+                        itemId + " | " + issues);
+                }
+            }
+        }
+
+        private static bool ReportSkippedCategory(string categoryName, ref bool reported)
+        {
+            if (!reported)
+            {
+                Debug.LogWarning(
+                    "[Solasta Expanded Equipment][ItemPickerIsolation] Temporarily skipping " +
+                    categoryName + " for the picker isolation test.");
+                reported = true;
+            }
+
+            // Treat the intentionally skipped category as complete so SEE does not
+            // retry the same test setup every two seconds.
+            return true;
         }
 
         private static bool RegisterCategory(
@@ -150,27 +245,33 @@ namespace SolastaExpandedEquipmentMod
 
             try
             {
-                ItemDefinition existing = itemDb.GetElement(itemId, true);
-                if (existing != null)
-                {
-                    Debug.Log(LogPrefix + displayName + " already exists; skipping.");
-                    return true;
-                }
-
-                ItemDefinition template = itemDb.GetElement("GlovesOfMissileSnaring", true);
                 Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
                 ConditionDefinition shocked = conditionDb == null ? null : conditionDb.GetElement("ConditionShocked", true);
-                ItemPropertyDescription propertyTemplate = FindPropertyTemplate(itemDb);
-                if (template == null || template.GuiPresentation == null || shocked == null || propertyTemplate == null)
+                if (shocked == null)
                 {
-                    Debug.LogError(LogPrefix + "Could not find the glove template, ConditionShocked, or item-property template for " + displayName + ".");
+                    Debug.LogError(LogPrefix + "Could not find ConditionShocked for " + displayName + ".");
                     return false;
                 }
 
                 FeatureDefinitionAdditionalDamage shockingFeature = GetOrCreateShockingFeature(shocked);
                 if (shockingFeature == null)
                 {
-                    Debug.LogError(LogPrefix + "Could not create the native Shocking Grasp hit feature.");
+                    Debug.LogError(LogPrefix + "Could not create or repair the native Shocking Grasp hit feature.");
+                    return false;
+                }
+
+                ItemDefinition existing = itemDb.GetElement(itemId, true);
+                if (existing != null)
+                {
+                    Debug.Log(LogPrefix + displayName + " already exists; Shocking Grasp feature GUI presentation verified.");
+                    return true;
+                }
+
+                ItemDefinition template = itemDb.GetElement("GlovesOfMissileSnaring", true);
+                ItemPropertyDescription propertyTemplate = FindPropertyTemplate(itemDb);
+                if (template == null || template.GuiPresentation == null || shocked == null || propertyTemplate == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not find the glove template, ConditionShocked, or item-property template for " + displayName + ".");
                     return false;
                 }
 
@@ -239,12 +340,27 @@ namespace SolastaExpandedEquipmentMod
 
             FeatureDefinitionAdditionalDamage feature = featureDb.GetElement(ShockingFeatureName, true);
             if (feature != null)
+            {
+                if (!EnsureShockingFeaturePresentation(feature, featureDb))
+                {
+                    Debug.LogError(LogPrefix + "Existing Shocking Grasp feature has no usable GUI presentation.");
+                    return null;
+                }
+
                 return feature;
+            }
 
             FeatureDefinitionAdditionalDamage template = null;
             foreach (FeatureDefinitionAdditionalDamage candidate in featureDb.GetAllElements())
             {
-                if (candidate != null)
+                if (candidate == null)
+                    continue;
+
+                if (template == null)
+                    template = candidate;
+
+                if (candidate.GuiPresentation != null &&
+                    !string.IsNullOrEmpty(candidate.GuiPresentation.Description))
                 {
                     template = candidate;
                     break;
@@ -265,15 +381,19 @@ namespace SolastaExpandedEquipmentMod
             feature.SetUserContentGUID(Guid.NewGuid().ToString());
             feature.IsUserContent = true;
 
+
             List<ConditionOperationDescription> conditionOperations =
                 new List<ConditionOperationDescription>();
 
             ConditionOperationDescription conditionOperation =
                 new ConditionOperationDescription();
+
             conditionOperation.ConditionDefinition = shocked;
             conditionOperation.Operation =
                 ConditionOperationDescription.ConditionOperation.Add;
+
             conditionOperations.Add(conditionOperation);
+
 
             bool configured =
                 SetMember(feature, "notificationTag", "GlovesOfShockingGrasp") &&
@@ -308,30 +428,72 @@ namespace SolastaExpandedEquipmentMod
                 SetMember(feature, "particlesBasedOnAncestryDamageType", false);
 
             if (configured)
-            {
-                // UB's documentation dump expects every registered definition to have
-                // a GUI presentation with a non-null description.
-                GuiPresentation featurePresentation = feature.GuiPresentation != null
-                    ? new GuiPresentation(feature.GuiPresentation)
-                    : new GuiPresentation();
-
-                featurePresentation.Title = "Shocking Grasp on Hit";
-                featurePresentation.Description =
-                    "Adds 1d8 Lightning damage and the Shocking Grasp condition to melee weapon hits.";
-
-                configured = SetMember(feature, "guiPresentation", featurePresentation) &&
-                             feature.GuiPresentation != null &&
-                             feature.GuiPresentation.Description != null;
-            }
+                configured = EnsureShockingFeaturePresentation(feature, featureDb);
 
             if (!configured)
             {
-                Debug.LogError(LogPrefix + "Could not configure all Shocking Grasp additional-damage fields.");
+                Debug.LogError(LogPrefix + "Could not configure all Shocking Grasp additional-damage fields or its GUI presentation.");
+                UnityEngine.Object.Destroy(feature);
                 return null;
             }
 
             featureDb.Add(feature);
-            return featureDb.GetElement(ShockingFeatureName, true);
+
+            FeatureDefinitionAdditionalDamage registered =
+                featureDb.GetElement(ShockingFeatureName, true);
+
+            if (registered == null || !EnsureShockingFeaturePresentation(registered, featureDb))
+            {
+                Debug.LogError(LogPrefix + "Shocking Grasp feature failed its post-registration GUI-presentation check.");
+                return null;
+            }
+
+            return registered;
+        }
+
+        private static bool EnsureShockingFeaturePresentation(
+            FeatureDefinitionAdditionalDamage feature,
+            Database<FeatureDefinitionAdditionalDamage> featureDb)
+        {
+            if (feature == null || featureDb == null)
+                return false;
+
+            GuiPresentation sourcePresentation = feature.GuiPresentation;
+
+            if (sourcePresentation == null ||
+                string.IsNullOrEmpty(sourcePresentation.Description))
+            {
+                sourcePresentation = null;
+
+                foreach (FeatureDefinitionAdditionalDamage candidate in featureDb.GetAllElements())
+                {
+                    if (candidate == null || object.ReferenceEquals(candidate, feature) ||
+                        candidate.GuiPresentation == null ||
+                        string.IsNullOrEmpty(candidate.GuiPresentation.Description))
+                        continue;
+
+                    sourcePresentation = candidate.GuiPresentation;
+                    break;
+                }
+            }
+
+            // Do not let an absent template presentation produce a null GUI value.
+            // The feature's own title and description are assigned immediately below.
+            GuiPresentation presentation = sourcePresentation != null
+                ? new GuiPresentation(sourcePresentation)
+                : new GuiPresentation();
+
+            presentation.Title = "Shocking Grasp on Hit";
+            presentation.Description =
+                "Adds 1d8 Lightning damage and the Shocking Grasp condition to melee weapon hits.";
+
+            if (!SetMember(feature, "guiPresentation", presentation))
+                return false;
+
+            GuiPresentation assigned = feature.GuiPresentation;
+            return assigned != null &&
+                !string.IsNullOrEmpty(assigned.Title) &&
+                !string.IsNullOrEmpty(assigned.Description);
         }
 
         private static bool RegisterColorSprayGloves(

@@ -40,15 +40,14 @@ namespace SolastaExpandedEquipmentMod
                 "VeryRare", true, "Minute");
 
             bool slotRings = RingSlotItems.Register(itemDb);
-            bool spellWands = RegisterSpellWands(itemDb);
             bool additionalRings = RegisterAdditionalRings(itemDb);
 
             Debug.Log(LogPrefix + "Ring registration results: Free Movement=" + freeMovement +
                 ", Knock=" + knock + ", Invisibility=" + invisibility +
-                ", Spell-slot rings=" + slotRings + ", Wands=" + spellWands +
+                ", Spell-slot rings=" + slotRings +
                 ", Additional rings=" + additionalRings + ".");
 
-            return freeMovement && knock && invisibility && slotRings && spellWands && additionalRings;
+            return freeMovement && knock && invisibility && slotRings && additionalRings;
         }
 
         private static bool RegisterAdditionalRings(Database<ItemDefinition> itemDb)
@@ -449,108 +448,6 @@ namespace SolastaExpandedEquipmentMod
                 return false;
             }
         }
-
-        private static bool RegisterSpellWands(Database<ItemDefinition> itemDb)
-        {
-            bool success = true;
-            success = RegisterSpellWand(itemDb, "WandOfDeathsDoor", "Wand of Death's Door",
-                "Revivify", 5, "VeryRare") && success;
-            success = RegisterSpellWand(itemDb, "WandOfConeOfCold", "Wand of Cone of Cold",
-                "ConeOfCold", 3, "VeryRare") && success;
-            success = RegisterSpellWand(itemDb, "WandOfRayOfEnfeeblement", "Wand of Ray of Enfeeblement",
-                "RayOfEnfeeblement", 5, "Uncommon") && success;
-            success = RegisterSpellWand(itemDb, "WandOfChromaticOrb", "Wand of Chromatic Orb",
-                "ChromaticOrb", 5, "Uncommon") && success;
-            success = RegisterSpellWand(itemDb, "WandOfAcidArrow", "Wand of Acid Arrow",
-                "AcidArrow", 5, "Uncommon") && success;
-
-            return success;
-        }
-
-        private static bool RegisterSpellWand(
-            Database<ItemDefinition> itemDb,
-            string itemId,
-            string displayName,
-            string spellId,
-            int charges,
-            string rarity)
-        {
-            try
-            {
-                if (itemDb.GetElement(itemId, true) != null)
-                {
-                    Debug.Log(LogPrefix + displayName + " already exists; skipping.");
-                    return true;
-                }
-
-                ItemDefinition baseWand = FindWandTemplate(itemDb);
-                if (baseWand == null)
-                {
-                    Debug.LogError(LogPrefix + "Could not find a usable wand template for " + displayName + ".");
-                    return false;
-                }
-
-                Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
-                if (spellDb == null)
-                {
-                    Debug.LogError(LogPrefix + "Spell database unavailable for " + displayName + ".");
-                    return false;
-                }
-
-                SpellDefinition spell = spellDb.GetElement(spellId, true);
-                if (spell == null)
-                {
-                    Debug.LogError(LogPrefix + "Could not find spell '" + spellId + "' for " + displayName + ".");
-                    return false;
-                }
-
-                ItemDefinition item = UnityEngine.Object.Instantiate(baseWand);
-                if (item == null)
-                    return false;
-
-                item.ForceName(itemId);
-                item.SetUserContentGUID(Guid.NewGuid().ToString());
-                item.IsUserContent = true;
-
-                string spellName = spell.GuiPresentation == null ? spellId : (spell.GuiPresentation.Title ?? spellId);
-                string description = "A magical wand with " + charges + " charges. Expend 1 charge to cast " +
-                    spellName + ". It regains all expended charges at dawn.";
-                if (!SetPresentation(item, baseWand, displayName, description))
-                    Debug.LogWarning(LogPrefix + "Could not completely set the presentation for " + displayName + ".");
-
-                bool magicalSet = SetMember(item, "magical", true);
-                bool attunementSet = SetMember(item, "requiresAttunement", true);
-                bool raritySet = SetEnumMember(item, "itemRarity", rarity);
-                bool deviceFlagSet = SetMember(item, "isUsableDevice", true);
-
-                if (!magicalSet || !attunementSet || !raritySet || !deviceFlagSet)
-                {
-                    Debug.LogError(LogPrefix + "Could not set all wand item fields for " + displayName + ".");
-                    return false;
-                }
-
-                if (!AttachSpellFunction(item, baseWand, spell, "Instantaneous", charges))
-                {
-                    Debug.LogError(LogPrefix + "Could not configure the spell function for " + displayName + ".");
-                    return false;
-                }
-
-                itemDb.Add(item);
-                bool registered = itemDb.GetElement(itemId, true) != null;
-                if (registered)
-                    Debug.Log(LogPrefix + "Registered " + displayName + " with " + charges + " charges, recharging at dawn.");
-                else
-                    Debug.LogError(LogPrefix + "Registration verification failed for " + displayName + ".");
-
-                return registered;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError(LogPrefix + "Failed to register " + displayName + ": " + ex);
-                return false;
-            }
-        }
-
         internal static ItemDefinition FindWandTemplate(Database<ItemDefinition> itemDb)
         {
             ItemDefinition preferred = itemDb.GetElement("WandOfLightningBolts", true);
@@ -1113,7 +1010,7 @@ namespace SolastaExpandedEquipmentMod
             return false;
         }
 
-        private static bool SetPresentation(ItemDefinition item, ItemDefinition template, string title, string description)
+        internal static bool SetPresentation(ItemDefinition item, ItemDefinition template, string title, string description)
         {
             if (item == null || template == null || template.GuiPresentation == null)
                 return false;
@@ -1147,7 +1044,7 @@ namespace SolastaExpandedEquipmentMod
             return null;
         }
 
-        private static bool SetMember(object target, string name, object value)
+        internal static bool SetMember(object target, string name, object value)
         {
             if (target == null)
                 return false;
@@ -1175,7 +1072,7 @@ namespace SolastaExpandedEquipmentMod
             return false;
         }
 
-        private static bool SetEnumMember(object target, string name, string enumValue)
+        internal static bool SetEnumMember(object target, string name, string enumValue)
         {
             if (target == null)
                 return false;
@@ -1382,9 +1279,32 @@ internal static class RingSlotItems
     {
         try
         {
-            if (itemDb.GetElement(ring.Id, true) != null)
+            // Validate or repair the feature definition even when the ring item
+            // already exists in the database. This avoids silently reusing an
+            // older feature with missing GUI text.
+            FeatureDefinitionMagicAffinity affinity = CreateSlotAffinity(ring);
+            if (affinity == null)
+                return false;
+
+            ItemDefinition existing = itemDb.GetElement(ring.Id, true);
+            if (existing != null)
             {
-                Debug.Log(LogPrefix + ring.Title + " already exists; skipping.");
+                GuiPresentation existingPresentation = existing.GuiPresentation != null
+                    ? new GuiPresentation(existing.GuiPresentation)
+                    : new GuiPresentation();
+                existingPresentation.Title = ring.Title;
+                existingPresentation.Description = BuildDescription(ring);
+
+                if (!SetMember(existing, "guiPresentation", existingPresentation) ||
+                    existing.GuiPresentation == null ||
+                    string.IsNullOrEmpty(existing.GuiPresentation.Title) ||
+                    string.IsNullOrEmpty(existing.GuiPresentation.Description))
+                {
+                    Debug.LogError(LogPrefix + ring.Title + " exists but its GUI presentation could not be repaired.");
+                    return false;
+                }
+
+                Debug.Log(LogPrefix + ring.Title + " already exists; its feature and GUI presentation were verified.");
                 return true;
             }
 
@@ -1401,10 +1321,6 @@ internal static class RingSlotItems
                 Debug.LogError(LogPrefix + "Could not find an item-property template for " + ring.Title + ".");
                 return false;
             }
-
-            FeatureDefinitionMagicAffinity affinity = CreateSlotAffinity(ring);
-            if (affinity == null)
-                return false;
 
             ItemDefinition item = UnityEngine.Object.Instantiate(template);
             if (item == null)
@@ -1564,13 +1480,11 @@ internal static class RingSlotItems
             }
         }
 
-        if (sourcePresentation == null)
-        {
-            Debug.LogError(LogPrefix + "No existing magic-affinity feature has a usable GUI presentation template.");
-            return false;
-        }
-
-        GuiPresentation presentation = new GuiPresentation(sourcePresentation);
+        // A blank presentation is a safe fallback when the source feature has no
+        // usable GUI text. The title and description are assigned immediately below.
+        GuiPresentation presentation = sourcePresentation != null
+            ? new GuiPresentation(sourcePresentation)
+            : new GuiPresentation();
         presentation.Title = ring.Title + " Spell Slot Affinity";
         presentation.Description = BuildDescription(ring);
 
