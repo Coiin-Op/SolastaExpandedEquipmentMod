@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -8,9 +9,11 @@ using UnityEngine;
 namespace SolastaExpandedEquipmentMod
 {
     /// <summary>
-    /// Adds a conditional +1 to attack and damage against the matching creature family.
-    /// Combined with the weapon's existing +1 feature, this gives +2 total against
-    /// the matching family and +1 total against other targets.
+    /// Preserves the existing conditional Slayer weapon bonuses and applies the shield set.
+    /// Creature-family shields add conditional AC against matching attackers; the missile shield
+    /// adds protection against ranged weapon/projectile attacks. +1 shields retain +1 universal AC
+    /// and gain the existing conditional bonus; +2 shields retain +2 universal AC and gain only
+    /// +1 conditional AC, for +3 total against their designated target.
     /// </summary>
     public static class BeastSlayerCombatPatch
     {
@@ -18,6 +21,9 @@ namespace SolastaExpandedEquipmentMod
         private static bool initialized;
         private static int matchingCallsLogged;
         private const int MaxMatchingLogs = 20;
+        private const string ShieldLogPrefix = "[SEE Creature Shields] ";
+        private static int shieldCallsLogged;
+        private const int MaxShieldLogs = 20;
 
         // If the game calls this postfix again on the same ActionModifier without
         // rebuilding its values, do not add the conditional bonuses twice.
@@ -55,7 +61,9 @@ namespace SolastaExpandedEquipmentMod
 
                 harmony.Patch(target, postfix: postfix);
                 initialized = true;
-                Debug.Log(LogPrefix + "PATCH ACTIVE - matching Slayer weapons get +1 additional attack and damage bonus against their target families ( +2 total with the base +1 feature). Patched " + target);
+                Debug.Log(LogPrefix + "PATCH ACTIVE - Existing Slayer weapon bonuses preserved. " +
+                    "Creature-family shields and missile defense active. Shields retain universal +1 AC; " +
+                    "conditional AC applies only to matching attacker families or ranged weapon attacks. Patched " + target);
             }
             catch (Exception ex)
             {
@@ -68,30 +76,38 @@ namespace SolastaExpandedEquipmentMod
             try
             {
                 // ComputeAttackModifier is called on the ATTACKING character.
-                // For this game's signature, args[0] is the defender/target,
-                // args[1] is RulesetAttackMode, and args[2] is ActionModifier.
-                if (__args == null || __args.Length < 3) return;
+                // args[0] is the defender, args[1] is RulesetAttackMode,
+                // and args[2] is the ActionModifier being prepared.
+                if (__instance == null || __args == null || __args.Length < 3) return;
 
                 object defender = __args[0];
                 object attackMode = __args[1];
                 object actionModifier = __args[2];
                 if (defender == null || attackMode == null || actionModifier == null) return;
 
-                string family = ReadMember(defender, "CharacterFamily");
+                string defenderFamily = ReadMember(defender, "CharacterFamily");
                 bool isBeastTarget =
-                    string.Equals(family, "Beast", StringComparison.OrdinalIgnoreCase);
+                    string.Equals(defenderFamily, "Beast", StringComparison.OrdinalIgnoreCase);
                 bool isFeyTarget =
-                    string.Equals(family, "Fey", StringComparison.OrdinalIgnoreCase);
-                bool isMagicalTarget = IsMagicalCreatureFamily(family);
+                    string.Equals(defenderFamily, "Fey", StringComparison.OrdinalIgnoreCase);
+                bool isMagicalTarget = IsMagicalCreatureFamily(defenderFamily);
 
-                // Match weapon and target families as alternatives, not cumulative
-                // requirements. For example, Fey is also in the magical-family set.
+                // Preserve the existing Slayer weapon rules exactly: target-family
+                // matches are alternatives, not cumulative requirements.
                 bool matchedSlayerRule =
                     (isBeastTarget && IsBeastSlayerAttack(attackMode)) ||
                     (isFeyTarget && IsFeySlayerAttack(attackMode)) ||
-                    (isMagicalTarget && IsMagicalSlayerAttack(attackMode));
+                    (isMagicalTarget && IsMagicalSlayerAttack(attackMode)) ||
+                    IsCreatureFamilySlayerLongsword(attackMode, defender, defenderFamily);
 
-                if (!matchedSlayerRule) return;
+                // Creature-family shields protect only the currently equipped defender,
+                // and only from an attacker matching the shield's configured family.
+                string attackerFamily = ReadMember(__instance, "CharacterFamily");
+                string matchedShieldName;
+                int additionalShieldBonus = GetEquippedCreatureShieldBonus(
+                    defender, __instance, attackerFamily, attackMode, out matchedShieldName);
+
+                if (!matchedSlayerRule && additionalShieldBonus <= 0) return;
 
                 object attackBefore = ReadNumericMember(actionModifier,
                     new[] { "AttackRollModifier", "attackRollModifier" });
@@ -99,33 +115,50 @@ namespace SolastaExpandedEquipmentMod
                     new[] { "DamageRollModifier", "damageRollModifier" });
                 int modifierId = RuntimeHelpers.GetHashCode(actionModifier);
 
+                // Share the existing ActionModifier stamp so the combined effects
+                // cannot add a Slayer bonus or shield penalty twice to one calculation.
                 AppliedStamp stamp;
                 if (AppliedModifiers.TryGetValue(actionModifier, out stamp) &&
                     ValuesEqual(stamp.LastAttackValue, attackBefore) &&
                     ValuesEqual(stamp.LastDamageValue, damageBefore))
                 {
-                    LogMatchingCall("Duplicate calculation seen; conditional bonuses not added twice. " +
-                        "Attacker=" + DescribeCharacter(__instance) +
-                        "; Defender=" + DescribeCharacter(defender) +
-                        "; ActionModifierId=" + modifierId +
-                        "; AttackRollModifier=" + DisplayValue(attackBefore) +
-                        "; DamageRollModifier=" + DisplayValue(damageBefore));
+                    if (additionalShieldBonus > 0)
+                    {
+                        LogShieldMatch("Duplicate calculation seen; shield penalty not applied twice. " +
+                            "Shield=" + matchedShieldName +
+                            "; Attacker=" + DescribeCharacter(__instance) +
+                            "; Defender=" + DescribeCharacter(defender) +
+                            "; ActionModifierId=" + modifierId);
+                    }
                     return;
                 }
 
-                // The weapon already provides its base +1. Add only +1 here so
-                // the total becomes +2 against the matching creature family.
-                bool attackChanged = AddToNumericMember(actionModifier,
-                    new[] { "AttackRollModifier", "attackRollModifier" }, 1);
-                bool damageChanged = AddToNumericMember(actionModifier,
-                    new[] { "DamageRollModifier", "damageRollModifier" }, 1);
+                bool slayerAttackChanged = false;
+                bool slayerDamageChanged = false;
+                bool shieldAttackChanged = false;
+
+                if (matchedSlayerRule)
+                {
+                    // The weapon already supplies its base +1. Add only +1 here,
+                    // preserving the original +2 total against its matching family.
+                    slayerAttackChanged = AddToNumericMember(actionModifier,
+                        new[] { "AttackRollModifier", "attackRollModifier" }, 1);
+                    slayerDamageChanged = AddToNumericMember(actionModifier,
+                        new[] { "DamageRollModifier", "damageRollModifier" }, 1);
+                }
+
+                if (additionalShieldBonus > 0)
+                {
+                    shieldAttackChanged = AddToNumericMember(actionModifier,
+                        new[] { "AttackRollModifier", "attackRollModifier" }, -additionalShieldBonus);
+                }
 
                 object attackAfter = ReadNumericMember(actionModifier,
                     new[] { "AttackRollModifier", "attackRollModifier" });
                 object damageAfter = ReadNumericMember(actionModifier,
                     new[] { "DamageRollModifier", "damageRollModifier" });
 
-                if (attackChanged || damageChanged)
+                if (slayerAttackChanged || slayerDamageChanged || shieldAttackChanged)
                 {
                     if (AppliedModifiers.TryGetValue(actionModifier, out stamp))
                     {
@@ -142,26 +175,51 @@ namespace SolastaExpandedEquipmentMod
                     }
                 }
 
-                LogMatchingCall("Conditional +1 attack and +1 damage against " + family + ". " +
-                    "Attacker=" + DescribeCharacter(__instance) +
-                    "; Defender=" + DescribeCharacter(defender) +
-                    "; AttackMode=" + DescribeAttackMode(attackMode) +
-                    "; ActionModifierId=" + modifierId +
-                    "; AttackBefore=" + DisplayValue(attackBefore) +
-                    "; AttackAfter=" + DisplayValue(attackAfter) +
-                    "; DamageBefore=" + DisplayValue(damageBefore) +
-                    "; DamageAfter=" + DisplayValue(damageAfter) +
-                    "; AttackModifierUpdated=" + attackChanged +
-                    "; DamageModifierUpdated=" + damageChanged);
+                if (matchedSlayerRule)
+                {
+                    LogMatchingCall("Conditional +1 attack and +1 damage against " + defenderFamily + ". " +
+                        "Attacker=" + DescribeCharacter(__instance) +
+                        "; Defender=" + DescribeCharacter(defender) +
+                        "; AttackMode=" + DescribeAttackMode(attackMode) +
+                        "; ActionModifierId=" + modifierId +
+                        "; AttackBefore=" + DisplayValue(attackBefore) +
+                        "; AttackAfter=" + DisplayValue(attackAfter) +
+                        "; DamageBefore=" + DisplayValue(damageBefore) +
+                        "; DamageAfter=" + DisplayValue(damageAfter) +
+                        "; SlayerAttackUpdated=" + slayerAttackChanged +
+                        "; SlayerDamageUpdated=" + slayerDamageChanged);
 
-                if (!attackChanged)
-                    Debug.LogWarning(LogPrefix + "Could not find a writable numeric AttackRollModifier on ActionModifier.");
-                if (!damageChanged)
-                    Debug.LogWarning(LogPrefix + "Could not find a writable numeric DamageRollModifier on ActionModifier.");
+                    if (!slayerAttackChanged)
+                        Debug.LogWarning(LogPrefix + "Could not find a writable numeric AttackRollModifier on ActionModifier.");
+                    if (!slayerDamageChanged)
+                        Debug.LogWarning(LogPrefix + "Could not find a writable numeric DamageRollModifier on ActionModifier.");
+                }
+
+                if (additionalShieldBonus > 0)
+                {
+                    if (shieldAttackChanged)
+                    {
+                        LogShieldMatch("Creature-family shield defense applied. " +
+                            "Shield=" + matchedShieldName +
+                            "; Attacker=" + DescribeCharacter(__instance) +
+                            "; Defender=" + DescribeCharacter(defender) +
+                            "; AttackMode=" + DescribeAttackMode(attackMode) +
+                            "; AdditionalConditionalAC=+" + additionalShieldBonus +
+                            "; ActionModifierId=" + modifierId +
+                            "; AttackRollModifier=" + DisplayValue(attackBefore) +
+                            " -> " + DisplayValue(attackAfter) +
+                            "; AppliedAttackPenalty=" + (-additionalShieldBonus));
+                    }
+                    else
+                    {
+                        Debug.LogWarning(ShieldLogPrefix +
+                            matchedShieldName + " found equipped, but the attack-roll modifier could not be changed.");
+                    }
+                }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning(LogPrefix + "Conditional attack bonus failed: " + ex);
+                Debug.LogWarning(LogPrefix + "Conditional combat modifier failed: " + ex);
             }
         }
 
@@ -174,6 +232,432 @@ namespace SolastaExpandedEquipmentMod
                 if (matchingCallsLogged == MaxMatchingLogs)
                     Debug.Log(LogPrefix + "Further matching-call logs suppressed.");
             }
+        }
+
+        private static void LogShieldMatch(string message)
+        {
+            if (shieldCallsLogged >= MaxShieldLogs) return;
+
+            shieldCallsLogged++;
+            Debug.Log(ShieldLogPrefix + "MATCH #" + shieldCallsLogged + "; " + message);
+            if (shieldCallsLogged == MaxShieldLogs)
+                Debug.Log(ShieldLogPrefix + "Further matching-shield logs suppressed.");
+        }
+
+        private static int GetEquippedCreatureShieldBonus(
+            object defender,
+            object attacker,
+            string attackerFamily,
+            object attackMode,
+            out string matchedShieldName)
+        {
+            matchedShieldName = null;
+            if (defender == null || attacker == null) return 0;
+
+            // InventorySlotsByName is the same inventory structure already used by
+            // this project in Rings.cs. Inspect only the active OffHandSlot.
+            object inventory = ReadMemberObject(defender, "CharacterInventory") ??
+                               ReadMemberObject(defender, "characterInventory");
+            if (inventory == null) return 0;
+
+            object slotsObject = ReadMemberObject(inventory, "InventorySlotsByName") ??
+                                 ReadMemberObject(inventory, "inventorySlotsByName");
+            IEnumerable slots = slotsObject as IEnumerable;
+            if (slots == null) return 0;
+
+            int highestBonus = 0;
+            foreach (object entry in slots)
+            {
+                object slot = ReadMemberObject(entry, "Value") ??
+                              ReadMemberObject(entry, "value");
+                if (slot == null) continue;
+
+                object slotType = ReadMemberObject(slot, "SlotTypeDefinition") ??
+                                  ReadMemberObject(slot, "slotTypeDefinition");
+                string slotTypeName = ReadMember(slotType, "Name") ??
+                                      ReadMember(slotType, "name");
+                if (!string.Equals(slotTypeName, "OffHandSlot", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                object equippedItem = ReadMemberObject(slot, "EquipedItem") ??
+                                      ReadMemberObject(slot, "equipedItem");
+                if (equippedItem == null) continue;
+
+                object itemDefinition = ReadMemberObject(equippedItem, "ItemDefinition") ??
+                                        ReadMemberObject(equippedItem, "itemDefinition");
+                string itemName = ReadMember(itemDefinition, "Name") ??
+                                  ReadMember(itemDefinition, "name");
+                if (string.IsNullOrEmpty(itemName)) continue;
+
+                int bonus = GetConditionalShieldBonus(itemName, attacker, attackerFamily, attackMode);
+                if (bonus > highestBonus)
+                {
+                    highestBonus = bonus;
+                    matchedShieldName = ReadMember(itemDefinition, "GuiPresentation") ?? itemName;
+                    object gui = ReadMemberObject(itemDefinition, "GuiPresentation") ??
+                                 ReadMemberObject(itemDefinition, "guiPresentation");
+                    string title = ReadMember(gui, "Title") ?? ReadMember(gui, "title");
+                    if (!string.IsNullOrEmpty(title)) matchedShieldName = title;
+                }
+            }
+
+            return highestBonus;
+        }
+
+        private static int GetConditionalShieldBonus(
+            string itemName,
+            object attacker,
+            string attackerFamily,
+            object attackMode)
+        {
+            // +1 family shields have +1 universal AC and gain +1 more against their
+            // selected family. Their missile variant gains +2 conditional AC (+3 total).
+            // +2 family shields have +2 universal AC and gain only +1 more (+3 total).
+            // Ranged spell attacks are excluded from both missile shields.
+            if (ItemIs(itemName, "ShieldVsMissilesPlus1"))
+                return IsMissileWeaponAttack(attackMode) ? 2 : 0;
+            if (ItemIs(itemName, "ShieldVsMissilesPlus2"))
+                return IsMissileWeaponAttack(attackMode) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsGiantsPlus1"))
+                return FamilyIs(attackerFamily, "Giant") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsGiantsPlus2"))
+                return FamilyIs(attackerFamily, "Giant") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsAberrationsPlus1"))
+                return FamilyIs(attackerFamily, "Aberration") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsAberrationsPlus2"))
+                return FamilyIs(attackerFamily, "Aberration") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsArtificerConstructsPlus1"))
+                return IsArtificerConstruct(attacker, attackerFamily) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsArtificerConstructsPlus2"))
+                return IsArtificerConstruct(attacker, attackerFamily) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsBeastsPlus1"))
+                return FamilyIs(attackerFamily, "Beast") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsBeastsPlus2"))
+                return FamilyIs(attackerFamily, "Beast") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsCelestialsPlus1"))
+                return FamilyIs(attackerFamily, "Celestial") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsCelestialsPlus2"))
+                return FamilyIs(attackerFamily, "Celestial") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsConstructsPlus1"))
+                return FamilyIs(attackerFamily, "Construct") &&
+                       !IsArtificerConstruct(attacker, attackerFamily) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsConstructsPlus2"))
+                return FamilyIs(attackerFamily, "Construct") &&
+                       !IsArtificerConstruct(attacker, attackerFamily) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsElementalsPlus1"))
+                return FamilyIs(attackerFamily, "Elemental") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsElementalsPlus2"))
+                return FamilyIs(attackerFamily, "Elemental") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsFeyPlus1"))
+                return FamilyIs(attackerFamily, "Fey") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsFeyPlus2"))
+                return FamilyIs(attackerFamily, "Fey") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsHumanoidsPlus1"))
+                return FamilyIs(attackerFamily, "Humanoid") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsHumanoidsPlus2"))
+                return FamilyIs(attackerFamily, "Humanoid") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsMonstrositiesPlus1"))
+                return FamilyIs(attackerFamily, "Monstrosity") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsMonstrositiesPlus2"))
+                return FamilyIs(attackerFamily, "Monstrosity") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsPlantsPlus1"))
+                return FamilyIs(attackerFamily, "Plant") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsPlantsPlus2"))
+                return FamilyIs(attackerFamily, "Plant") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsUndeadPlus1"))
+                return FamilyIs(attackerFamily, "Undead") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsUndeadPlus2"))
+                return FamilyIs(attackerFamily, "Undead") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsSorrAkkathPlus1"))
+                return IsSorrAkkath(attacker, attackerFamily) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsSorrAkkathPlus2"))
+                return IsSorrAkkath(attacker, attackerFamily) ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsDragonsPlus1"))
+                return FamilyIs(attackerFamily, "Dragon") ? 1 : 0;
+            if (ItemIs(itemName, "ShieldVsDragonsPlus2"))
+                return FamilyIs(attackerFamily, "Dragon") ? 1 : 0;
+
+            // Special shield: +1 universally, +2 total vs Fey, +3 total vs Elementals.
+            if (ItemIs(itemName, "ShieldVsFeyAndElementalsPlus1"))
+            {
+                if (FamilyIs(attackerFamily, "Elemental")) return 2;
+                if (FamilyIs(attackerFamily, "Fey")) return 1;
+            }
+
+            return 0;
+        }
+
+        private static bool IsMissileWeaponAttack(object attackMode)
+        {
+            if (attackMode == null)
+                return false;
+
+            object rangedValue = ReadMemberObject(attackMode, "Ranged") ??
+                                 ReadMemberObject(attackMode, "ranged");
+            object thrownValue = ReadMemberObject(attackMode, "Thrown") ??
+                                 ReadMemberObject(attackMode, "thrown");
+
+            bool isRanged = rangedValue is bool && (bool)rangedValue;
+            bool isThrown = thrownValue is bool && (bool)thrownValue;
+            if (!isRanged && !isThrown)
+                return false;
+
+            // WeaponDescription is populated for physical weapon attacks. Requiring
+            // it avoids granting the missile bonus against ranged spell attacks.
+            object weaponDescription = ReadMemberObject(attackMode, "WeaponDescription") ??
+                                       ReadMemberObject(attackMode, "weaponDescription");
+            if (weaponDescription != null)
+                return true;
+
+            // Some thrown-weapon attack modes expose their source definition directly
+            // rather than carrying WeaponDescription. Accept those only when the mode
+            // identifies a weapon definition, never merely an effect description.
+            object weaponDefinition = ReadMemberObject(attackMode, "WeaponDefinition") ??
+                                     ReadMemberObject(attackMode, "weaponDefinition");
+            return weaponDefinition != null;
+        }
+
+        private static bool ItemIs(string actual, string expected)
+        {
+            return string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool FamilyIs(string actualFamily, string expectedFamily)
+        {
+            return NormalizeFamily(actualFamily) == NormalizeFamily(expectedFamily);
+        }
+
+        private static string NormalizeFamily(string family)
+        {
+            if (string.IsNullOrEmpty(family)) return string.Empty;
+
+            string value = family.Trim()
+                .Replace(" ", string.Empty)
+                .Replace("-", string.Empty)
+                .Replace("_", string.Empty)
+                .ToLowerInvariant();
+
+            // Family names in UI labels are plural, while CharacterFamily is
+            // normally singular. Accept both forms without broad substring matches.
+            switch (value)
+            {
+                case "giants": return "giant";
+                case "aberrations": return "aberration";
+                case "artificerconstructs": return "artificerconstruct";
+                case "beasts": return "beast";
+                case "celestials": return "celestial";
+                case "constructs": return "construct";
+                case "elementals": return "elemental";
+                case "humanoids": return "humanoid";
+                case "monstrosities": return "monstrosity";
+                case "plants": return "plant";
+                case "dragons": return "dragon";
+                case "sorrakkaths": return "sorrakkath";
+                default: return value;
+            }
+        }
+
+        private static bool IsArtificerConstruct(object attacker, string attackerFamily)
+        {
+            if (FamilyIs(attackerFamily, "ArtificerConstruct")) return true;
+            if (!FamilyIs(attackerFamily, "Construct")) return false;
+
+            // Keep this separate from the ordinary Constructs shield. Within the
+            // broad Construct family, use the monster definition's identity to pick
+            // out artificer-built types such as Steel Defenders and Homunculi.
+            return AttackerIdentityContains(attacker,
+                "artificer", "steeldefender", "homunculus", "dancingweapon");
+        }
+
+        private static bool IsSorrAkkath(object attacker, string attackerFamily)
+        {
+            if (FamilyIs(attackerFamily, "Sorr-Akkath")) return true;
+
+            // Sorr-Akkath are also referred to as Soraks in Solasta's creature names.
+            return AttackerIdentityContains(attacker,
+                "sorrakkath", "sorak", "sessroth", "sorrtarr");
+        }
+
+        private static bool AttackerIdentityContains(object attacker, params string[] tokens)
+        {
+            if (attacker == null || tokens == null || tokens.Length == 0) return false;
+
+            if (ObjectIdentityContains(attacker, tokens)) return true;
+
+            string[] nestedMembers =
+            {
+                "MonsterDefinition", "monsterDefinition",
+                "RaceDefinition", "raceDefinition",
+                "OriginalFormCharacter", "originalFormCharacter"
+            };
+
+            foreach (string memberName in nestedMembers)
+            {
+                object nested = ReadMemberObject(attacker, memberName);
+                if (nested != null && ObjectIdentityContains(nested, tokens)) return true;
+            }
+
+            return false;
+        }
+
+        private static bool ObjectIdentityContains(object value, string[] tokens)
+        {
+            if (value == null) return false;
+
+            string[] textMembers = { "Name", "name", "SystemName", "systemName", "Title", "title" };
+            foreach (string memberName in textMembers)
+            {
+                string candidate = ReadMember(value, memberName);
+                if (TextContainsAnyToken(candidate, tokens)) return true;
+            }
+
+            object gui = ReadMemberObject(value, "GuiPresentation") ??
+                         ReadMemberObject(value, "guiPresentation");
+            if (gui != null)
+            {
+                foreach (string memberName in new[] { "Title", "title", "Description", "description" })
+                {
+                    string candidate = ReadMember(gui, memberName);
+                    if (TextContainsAnyToken(candidate, tokens)) return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TextContainsAnyToken(string text, string[] tokens)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+
+            string normalized = NormalizeIdentity(text);
+            foreach (string token in tokens)
+            {
+                string normalizedToken = NormalizeIdentity(token);
+                if (normalizedToken.Length > 0 && normalized.IndexOf(
+                    normalizedToken, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string NormalizeIdentity(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+
+            var chars = new List<char>(value.Length);
+            foreach (char c in value)
+            {
+                if (char.IsLetterOrDigit(c)) chars.Add(char.ToLowerInvariant(c));
+            }
+            return new string(chars.ToArray());
+        }
+
+        private static bool IsCreatureFamilySlayerLongsword(
+            object attackMode,
+            object defender,
+            string defenderFamily)
+        {
+            // Find the equipped weapon ID once. This postfix runs for every attack,
+            // so avoid repeating a full reflection scan for every possible family.
+            string weaponName = FindCreatureFamilySlayerLongswordName(attackMode);
+            if (string.IsNullOrEmpty(weaponName))
+                return false;
+
+            // Each longsword adds +1 attack and +1 damage against its matching family.
+            // The weapon's own feature already supplies its universal +1/+1 bonus.
+            if (WeaponNameIs(weaponName, "LongswordVsGiantsPlus1"))
+                return FamilyIs(defenderFamily, "Giant");
+            if (WeaponNameIs(weaponName, "LongswordVsAberrationsPlus1"))
+                return FamilyIs(defenderFamily, "Aberration");
+            if (WeaponNameIs(weaponName, "LongswordVsArtificerConstructsPlus1"))
+                return IsArtificerConstruct(defender, defenderFamily);
+            if (WeaponNameIs(weaponName, "LongswordVsCelestialsPlus1"))
+                return FamilyIs(defenderFamily, "Celestial");
+            if (WeaponNameIs(weaponName, "LongswordVsConstructsPlus1"))
+                return FamilyIs(defenderFamily, "Construct") &&
+                       !IsArtificerConstruct(defender, defenderFamily);
+            if (WeaponNameIs(weaponName, "LongswordVsElementalsPlus1"))
+                return FamilyIs(defenderFamily, "Elemental");
+            if (WeaponNameIs(weaponName, "LongswordVsFeyPlus1"))
+                return FamilyIs(defenderFamily, "Fey");
+            if (WeaponNameIs(weaponName, "LongswordVsHumanoidsPlus1"))
+                return FamilyIs(defenderFamily, "Humanoid");
+            if (WeaponNameIs(weaponName, "LongswordVsMonstrositiesPlus1"))
+                return FamilyIs(defenderFamily, "Monstrosity");
+            if (WeaponNameIs(weaponName, "LongswordVsPlantsPlus1"))
+                return FamilyIs(defenderFamily, "Plant");
+            if (WeaponNameIs(weaponName, "LongswordVsUndeadPlus1"))
+                return FamilyIs(defenderFamily, "Undead");
+            if (WeaponNameIs(weaponName, "LongswordVsSorrAkkathPlus1"))
+                return IsSorrAkkath(defender, defenderFamily);
+            if (WeaponNameIs(weaponName, "LongswordVsDragonsPlus1"))
+                return FamilyIs(defenderFamily, "Dragon");
+
+            return false;
+        }
+
+        private static string FindCreatureFamilySlayerLongswordName(object attackMode)
+        {
+            if (attackMode == null)
+                return null;
+
+            foreach (string memberName in new[]
+            {
+                "weaponDefinition", "WeaponDefinition",
+                "sourceDefinition", "SourceDefinition",
+                "itemDefinition", "ItemDefinition",
+                "weapon", "Weapon", "sourceObject", "SourceObject"
+            })
+            {
+                string name = GetCreatureFamilyLongswordNameFromValue(
+                    ReadMemberObject(attackMode, memberName));
+                if (!string.IsNullOrEmpty(name))
+                    return name;
+            }
+
+            // Some game versions nest the definition under a member whose exact name
+            // differs. Inspect only weapon/item members, matching the original Slayer
+            // weapon reflection approach.
+            foreach (MemberInfo member in GetMembers(attackMode.GetType()))
+            {
+                if (member.Name.IndexOf("weapon", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    member.Name.IndexOf("item", StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                string name = GetCreatureFamilyLongswordNameFromValue(
+                    GetValue(attackMode, member));
+                if (!string.IsNullOrEmpty(name))
+                    return name;
+            }
+
+            return null;
+        }
+
+        private static string GetCreatureFamilyLongswordNameFromValue(object value)
+        {
+            if (value == null)
+                return null;
+
+            string name = ReadMember(value, "Name");
+            if (IsCreatureFamilyLongswordName(name))
+                return name;
+
+            string text = SafeToString(value);
+            return IsCreatureFamilyLongswordName(text) ? text : null;
+        }
+
+        private static bool IsCreatureFamilyLongswordName(string value)
+        {
+            return !string.IsNullOrEmpty(value) &&
+                value.IndexOf("LongswordVs", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                value.IndexOf("Plus1", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool WeaponNameIs(string actual, string expected)
+        {
+            return !string.IsNullOrEmpty(actual) &&
+                actual.IndexOf(expected, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool IsBeastSlayerAttack(object attackMode)
@@ -412,8 +896,9 @@ namespace SolastaExpandedEquipmentMod
         {
             foreach (string memberName in new[]
             {
-                "weaponDefinition", "WeaponDefinition", "sourceDefinition", "SourceDefinition",
-                "itemDefinition", "ItemDefinition", "weapon", "Weapon", "sourceObject", "SourceObject"
+                "weaponDefinition", "WeaponDefinition", "weaponDescription", "WeaponDescription",
+                "sourceDefinition", "SourceDefinition", "itemDefinition", "ItemDefinition",
+                "weapon", "Weapon", "sourceObject", "SourceObject"
             })
             {
                 object value = ReadMemberObject(attackMode, memberName);

@@ -71,8 +71,6 @@ namespace SolastaExpandedEquipmentMod
                 "Air", new[] { "SummonAirElemental", "ConjureAirElemental", "ConjureElementalAir" });
             success &= RegisterElementalRing(itemDb, "RingOfTheEarthElemental", "Ring of the Earth Elemental",
                 "Earth", new[] { "SummonEarthElemental", "ConjureEarthElemental", "ConjureElementalEarth" });
-            success &= RegisterElementalRing(itemDb, "RingOfTheWaterElemental", "Ring of the Water Elemental",
-                "Water", new[] { "SummonWaterElemental", "ConjureWaterElemental", "ConjureElementalWater" });
             return success;
         }
 

@@ -8,6 +8,8 @@
             bool aspNestRegistered = WeaponFactory.RegisterAspNestDart();
             bool longswordRegistered =
                 WeaponFactory.RegisterBeastSlayerLongsword();
+            bool creatureFamilyLongswordsRegistered =
+                WeaponFactory.RegisterCreatureFamilySlayerLongswords();
             bool shortswordRegistered =
                 WeaponFactory.RegisterBeastSlayerShortsword();
             bool greatswordRegistered =
@@ -22,6 +24,7 @@
             return dartsRegistered &&
                 aspNestRegistered &&
                 longswordRegistered &&
+                creatureFamilyLongswordsRegistered &&
                 shortswordRegistered &&
                 greatswordRegistered &&
                 feyShortswordRegistered &&

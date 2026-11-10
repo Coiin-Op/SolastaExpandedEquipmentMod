@@ -392,6 +392,175 @@ namespace SolastaExpandedEquipmentMod
             }
         }
 
+        // Registers one longsword for each requested creature family except Beasts.
+        // Beast Slayer Longsword is an established item with a tested ID and remains
+        // registered by RegisterBeastSlayerLongsword() above.
+        public static bool RegisterCreatureFamilySlayerLongswords()
+        {
+            try
+            {
+                Database<ItemDefinition> itemDb =
+                    DatabaseRepository.GetDatabase<ItemDefinition>();
+
+                if (itemDb == null)
+                {
+                    Debug.LogError(LogPrefix + "Item database unavailable for creature-family longswords.");
+                    return false;
+                }
+
+                ItemDefinition baseSword = itemDb.GetElement("Longsword", true);
+                if (baseSword == null || baseSword.GuiPresentation == null)
+                {
+                    Debug.LogError(LogPrefix + "Vanilla Longsword template unavailable or incomplete.");
+                    return false;
+                }
+
+                // Item IDs are unique and do not replace any of the existing Slayer weapons.
+                string[][] specs =
+                {
+                    new[] { "LongswordVsGiantsPlus1", "Longsword +1, +2 vs Giants", "Giants" },
+                    new[] { "LongswordVsAberrationsPlus1", "Longsword +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "LongswordVsArtificerConstructsPlus1", "Longsword +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "LongswordVsCelestialsPlus1", "Longsword +1, +2 vs Celestials", "Celestials" },
+                    new[] { "LongswordVsConstructsPlus1", "Longsword +1, +2 vs Constructs", "Constructs" },
+                    new[] { "LongswordVsElementalsPlus1", "Longsword +1, +2 vs Elementals", "Elementals" },
+                    new[] { "LongswordVsFeyPlus1", "Longsword +1, +2 vs Fey", "Fey" },
+                    new[] { "LongswordVsHumanoidsPlus1", "Longsword +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "LongswordVsMonstrositiesPlus1", "Longsword +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "LongswordVsPlantsPlus1", "Longsword +1, +2 vs Plants", "Plants" },
+                    new[] { "LongswordVsUndeadPlus1", "Longsword +1, +2 vs Undead", "Undead" },
+                    new[] { "LongswordVsSorrAkkathPlus1", "Longsword +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "LongswordVsDragonsPlus1", "Longsword +1, +2 vs Dragons", "Dragons" }
+                };
+
+                int succeeded = 0;
+                foreach (string[] spec in specs)
+                {
+                    if (RegisterCreatureFamilySlayerLongsword(
+                        itemDb, baseSword, spec[0], spec[1], spec[2]))
+                    {
+                        succeeded++;
+                    }
+                }
+
+                Debug.Log(LogPrefix + "Creature-family longsword registration complete: " +
+                    succeeded + "/" + specs.Length + " new longswords registered. " +
+                    "The existing Beast Slayer Longsword remains the Beast entry.");
+
+                return succeeded == specs.Length;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Creature-family longsword registration failed: " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterCreatureFamilySlayerLongsword(
+            Database<ItemDefinition> itemDb,
+            ItemDefinition baseSword,
+            string itemId,
+            string displayName,
+            string creatureFamily)
+        {
+            try
+            {
+                ItemDefinition existing = itemDb.GetElement(itemId, true);
+                if (existing != null)
+                {
+                    existing.IsUserContent = true;
+
+                    if (existing.GuiPresentation != null)
+                    {
+                        GuiPresentation existingGui = new GuiPresentation(existing.GuiPresentation);
+                        existingGui.Title = displayName;
+                        existingGui.Description =
+                            "A magical longsword that grants +1 to attack and damage, " +
+                            "with an additional +1 to attack and damage against " + creatureFamily +
+                            " (for +2 total attack and damage against that family).";
+                        SetField(existing, "guiPresentation", existingGui);
+                    }
+
+                    Debug.Log(LogPrefix + displayName + " already exists; kept existing definition.");
+                    return true;
+                }
+
+                ItemDefinition sword = UnityEngine.Object.Instantiate(baseSword);
+                if (sword == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not clone " + displayName + ".");
+                    return false;
+                }
+
+                sword.ForceName(itemId);
+                sword.SetUserContentGUID(Guid.NewGuid().ToString());
+                sword.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(baseSword.GuiPresentation);
+                presentation.Title = displayName;
+                presentation.Description =
+                    "A magical longsword that grants +1 to attack and damage, " +
+                    "with an additional +1 to attack and damage against " + creatureFamily +
+                    " (for +2 total attack and damage against that family).";
+
+                if (!SetField(sword, "guiPresentation", presentation))
+                {
+                    Debug.LogError(LogPrefix + "Could not set presentation for " + displayName + ".");
+                    return false;
+                }
+
+                if (!SetField(sword, "magical", true))
+                {
+                    Debug.LogError(LogPrefix + "Could not mark " + displayName + " magical.");
+                    return false;
+                }
+
+                FeatureDefinitionAttackModifier modifier =
+                    CreateAttackModifier(itemId, displayName, 1, baseSword.GuiPresentation);
+                if (modifier == null)
+                    return false;
+
+                List<ItemPropertyDescription> properties = sword.StaticProperties;
+                if (properties == null)
+                {
+                    properties = new List<ItemPropertyDescription>();
+                    if (!SetField(sword, "staticProperties", properties))
+                    {
+                        Debug.LogError(LogPrefix + "Could not initialize properties for " + displayName + ".");
+                        return false;
+                    }
+                }
+
+                ItemPropertyDescription property =
+                    CreateFeatureProperty(itemDb, baseSword, modifier);
+                if (property == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not create attack/damage property for " + displayName + ".");
+                    return false;
+                }
+
+                properties.Add(property);
+                itemDb.Add(sword);
+
+                ItemDefinition registered = itemDb.GetElement(itemId, true);
+                if (registered == null)
+                {
+                    Debug.LogError(LogPrefix + "Registration verification failed for " + displayName + ".");
+                    return false;
+                }
+
+                Debug.Log(LogPrefix + "Registered " + displayName +
+                    " | BaseBonus=+1 attack/+1 damage | ConditionalBonus=+1 attack/+1 damage vs " +
+                    creatureFamily + " | TotalVsFamily=+2/+2.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Failed to register " + displayName + ": " + ex);
+                return false;
+            }
+        }
+
         private static bool RegisterBeastSlayerVariant(
             string baseWeaponId,
             string itemId,
@@ -1173,6 +1342,581 @@ namespace SolastaExpandedEquipmentMod
                     displayName + ": " + ex);
 
                 return false;
+            }
+        }
+
+
+        private const string MagicalLongswordWeakeningConditionId = "ConditionSEELongswordWeakening";
+        private static bool magicalLongswordWeakeningPatchInitialized;
+
+        public static bool RegisterMagicalLongswords()
+        {
+            try
+            {
+                Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+                Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+                Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+                if (itemDb == null || spellDb == null || conditionDb == null)
+                {
+                    Debug.LogError(LogPrefix + "Item, spell, or condition database unavailable for magical longswords.");
+                    return false;
+                }
+
+                if (!InitializeMagicalLongswordWeakeningPatch())
+                    return false;
+
+                ConditionDefinition proneCondition = conditionDb.GetElement("ConditionProne", true);
+                ConditionDefinition baneCondition = conditionDb.GetElement("ConditionBaned", true);
+                ConditionDefinition weakeningCondition = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+                if (proneCondition == null || baneCondition == null || weakeningCondition == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not resolve ConditionProne, ConditionBaned, or the custom Weakening condition.");
+                    return false;
+                }
+
+                ItemDefinition baseSword = itemDb.GetElement("Longsword", true);
+                if (baseSword == null || baseSword.GuiPresentation == null)
+                {
+                    Debug.LogError(LogPrefix + "Vanilla Longsword template unavailable for magical longswords.");
+                    return false;
+                }
+
+                // Each damage sword adds exactly 1d6 of its listed damage type.
+                // Status swords copy only the intended spell's on-hit forms.
+                string[][] specs =
+                {
+                    new[] { "LongswordPlus1OfBlindness", "Longsword +1 of Blindness", "Blindness", "Blindness", "Status" },
+                    new[] { "LongswordPlus1OfAcid", "Longsword +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                    new[] { "LongswordPlus1OfFire", "Longsword +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                    new[] { "LongswordPlus1OfLightning", "Longsword +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                    new[] { "LongswordPlus1OfCold", "Longsword +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                    new[] { "LongswordPlus1OfPoison", "Longsword +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                    new[] { "LongswordPlus1OfWilting", "Longsword +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                    new[] { "LongswordPlus1OfLight", "Longsword +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                    new[] { "LongswordPlus1OfBooming", "Longsword +1 of Booming", "Thunderwave", "DamageThunder", "Damage" },
+                    new[] { "LongswordPlus1OfBane", "Longsword +1 of Bane", "Bane", "Bane", "Bane" },
+                    new[] { "LongswordPlus1OfCurses", "Longsword +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                    new[] { "LongswordPlus1OfWeakening", "Longsword +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                    new[] { "LongswordPlus1OfPower", "Longsword +1 of Power", "Grease", "Prone", "Prone" }
+                };
+
+                int succeeded = 0;
+                foreach (string[] spec in specs)
+                {
+                    if (RegisterMagicalLongsword(itemDb, spellDb, baseSword,
+                        spec[0], spec[1], spec[2], spec[3], spec[4],
+                        proneCondition, baneCondition, weakeningCondition))
+                        succeeded++;
+                }
+
+                Debug.Log(LogPrefix + "Magical longsword registration complete: " +
+                    succeeded + "/" + specs.Length + " registered.");
+                return succeeded == specs.Length;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Magical longsword registration failed: " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterMagicalLongsword(
+            Database<ItemDefinition> itemDb,
+            Database<SpellDefinition> spellDb,
+            ItemDefinition baseSword,
+            string itemId,
+            string displayName,
+            string spellId,
+            string effectKey,
+            string effectMode,
+            ConditionDefinition proneCondition,
+            ConditionDefinition baneCondition,
+            ConditionDefinition weakeningCondition)
+        {
+            try
+            {
+                ItemDefinition existing = itemDb.GetElement(itemId, true);
+                if (existing != null)
+                {
+                    Debug.Log(LogPrefix + displayName + " already exists; kept existing definition.");
+                    return true;
+                }
+
+                // Pure bonus-damage swords and the Prone sword do not need spell lookups.
+                // Bonus damage is built directly as a native Damage EffectForm.
+                SpellDefinition sourceSpell = null;
+                if (effectMode != "Damage" && effectMode != "Prone")
+                {
+                    sourceSpell = spellDb.GetElement(spellId, true);
+                    if (sourceSpell == null)
+                    {
+                        Debug.LogError(LogPrefix + "Could not find spell template " + spellId + " for " + displayName + ".");
+                        return false;
+                    }
+                }
+
+                ItemDefinition sword = UnityEngine.Object.Instantiate(baseSword);
+                if (sword == null)
+                    return false;
+
+                sword.ForceName(itemId);
+                sword.SetUserContentGUID(Guid.NewGuid().ToString());
+                sword.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(baseSword.GuiPresentation);
+                presentation.Title = displayName;
+                presentation.Description = "A magical +1 longsword. " + GetMagicalLongswordDescription(effectMode, effectKey) +
+                    " Its magical effect triggers when the weapon hits a target.";
+                if (!SetField(sword, "guiPresentation", presentation) || !SetField(sword, "magical", true))
+                {
+                    Debug.LogError(LogPrefix + "Could not configure presentation or magical flag for " + displayName + ".");
+                    return false;
+                }
+
+                FeatureDefinitionAttackModifier modifier =
+                    CreateAttackModifier(itemId, displayName, 1, baseSword.GuiPresentation);
+                if (modifier == null)
+                    return false;
+
+                List<ItemPropertyDescription> properties = sword.StaticProperties;
+                if (properties == null)
+                {
+                    properties = new List<ItemPropertyDescription>();
+                    if (!SetField(sword, "staticProperties", properties))
+                        return false;
+                }
+
+                ItemPropertyDescription property = CreateFeatureProperty(itemDb, baseSword, modifier);
+                if (property == null)
+                    return false;
+                properties.Add(property);
+
+                object weaponDescription = ReadMemberObject(sword, "WeaponDescription");
+                object weaponEffect = ReadMemberObject(weaponDescription, "EffectDescription");
+                System.Collections.IList weaponForms =
+                    ReadMemberObject(weaponEffect, "EffectForms") as System.Collections.IList;
+                if (weaponDescription == null || weaponEffect == null || weaponForms == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not access WeaponDescription effect forms for " + displayName + ".");
+                    return false;
+                }
+
+                weaponForms.Clear();
+                if (!BuildMagicalLongswordForms(sourceSpell, weaponEffect, weaponForms,
+                    effectMode, effectKey, displayName,
+                    proneCondition, baneCondition, weakeningCondition))
+                    return false;
+
+                itemDb.Add(sword);
+                bool registered = itemDb.GetElement(itemId, true) != null;
+                if (registered)
+                    Debug.Log(LogPrefix + "Registered " + displayName + " with +1 attack/damage and " + effectMode + " on-hit effect.");
+                return registered;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Failed to register " + displayName + ": " + ex);
+                return false;
+            }
+        }
+
+        private static string GetMagicalLongswordDescription(string mode, string key)
+        {
+            if (mode == "Damage") return "+1d6 " + key.Replace("Damage", "").ToLowerInvariant() + " damage.";
+            if (mode == "RandomCurse") return "On a hit, randomly applies one effect from the Bestow Curse spell.";
+            if (mode == "Weakening") return "On a hit, the target must make a Strength saving throw (DC 11) or become Enfeebled.";
+            if (mode == "Prone") return "On a hit, the target must fail a DC 11 Constitution saving throw or fall Prone.";
+            if (key == "Blindness") return "On a hit, may Blind the target.";
+            if (key == "Bane") return "On a hit, applies the Banestruck effect.";
+            return "On a hit, applies its magical effect.";
+        }
+
+        private static bool BuildMagicalLongswordForms(
+            SpellDefinition sourceSpell,
+            object weaponEffect,
+            System.Collections.IList weaponForms,
+            string mode,
+            string key,
+            string displayName,
+            ConditionDefinition proneCondition,
+            ConditionDefinition baneCondition,
+            ConditionDefinition weakeningCondition)
+        {
+            try
+            {
+                if (mode == "Damage")
+                {
+                    EffectForm bonusDamage = CreateMagicalLongswordDamageEffectForm(key);
+                    if (bonusDamage == null)
+                    {
+                        Debug.LogError(LogPrefix + "Could not create the direct 1d6 " + key + " damage form for " + displayName + ".");
+                        return false;
+                    }
+
+                    weaponForms.Add(bonusDamage);
+                    bool damageEffectConfigured =
+                        SetMember(weaponEffect, "hasSavingThrow", false) &&
+                        SetEnumMember(weaponEffect, "durationType", "Instantaneous") &&
+                        SetMember(weaponEffect, "durationParameter", 1);
+
+                    if (!damageEffectConfigured)
+                    {
+                        Debug.LogError(LogPrefix + "Could not configure the immediate on-hit damage effect for " + displayName + ".");
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                if (mode == "Prone")
+                {
+                    EffectForm proneForm = CreateMagicalLongswordConditionForm(proneCondition, true);
+                    if (proneForm == null)
+                    {
+                        Debug.LogError(LogPrefix + "Could not create the native Prone condition form for " + displayName + ".");
+                        return false;
+                    }
+
+                    weaponForms.Add(proneForm);
+
+                    bool saveConfigured =
+                        SetMember(weaponEffect, "hasSavingThrow", true) &&
+                        SetMember(weaponEffect, "savingThrowAbility", "Constitution") &&
+                        SetEnumMember(weaponEffect, "difficultyClassComputation", "FixedValue") &&
+                        SetMember(weaponEffect, "fixedSavingThrowDifficultyClass", 11) &&
+                        SetEnumMember(weaponEffect, "durationType", "Hour") &&
+                        SetMember(weaponEffect, "durationParameter", 1);
+
+                    if (!saveConfigured)
+                    {
+                        Debug.LogError(LogPrefix + "Could not configure the DC 11 Constitution save and duration for " + displayName + ".");
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                EffectDescription sourceDescription = sourceSpell.EffectDescription;
+                if (mode == "Bane")
+                {
+                    EffectForm baneForm = CreateMagicalLongswordConditionForm(baneCondition, false);
+                    if (baneForm == null)
+                    {
+                        Debug.LogError(LogPrefix + "Could not create the Banestruck condition form for " + displayName + ".");
+                        return false;
+                    }
+
+                    weaponForms.Add(baneForm);
+                    CopyLongswordEffectMetadata(sourceDescription, weaponEffect);
+                    SetMember(weaponEffect, "hasSavingThrow", false);
+                    return true;
+                }
+
+                if (mode == "RandomCurse")
+                {
+                    SpellDefinition bundle = sourceSpell;
+                    if (bundle.SubspellsList == null || bundle.SubspellsList.Count == 0)
+                    {
+                        Debug.LogError(LogPrefix + "Bestow Curse has no variants for " + displayName + ".");
+                        return false;
+                    }
+                    EffectForm marker = SpellDartItems.CreateRandomCurseMarker(bundle);
+                    if (marker == null)
+                        return false;
+                    weaponForms.Add(marker);
+                    SpellDefinition firstVariant = null;
+                    foreach (SpellDefinition variant in bundle.SubspellsList)
+                    {
+                        if (variant != null && variant.EffectDescription != null &&
+                            variant.EffectDescription.EffectForms != null && variant.EffectDescription.EffectForms.Count > 0)
+                        {
+                            firstVariant = variant;
+                            break;
+                        }
+                    }
+                    if (firstVariant == null)
+                        return false;
+                    CopyLongswordEffectMetadata(firstVariant.EffectDescription, weaponEffect);
+                    return true;
+                }
+
+                if (sourceDescription == null || sourceDescription.EffectForms == null || sourceDescription.EffectForms.Count == 0)
+                {
+                    Debug.LogError(LogPrefix + "Spell " + sourceSpell.Name + " has no effect forms for " + displayName + ".");
+                    return false;
+                }
+
+                int copied = 0;
+                foreach (EffectForm sourceForm in sourceDescription.EffectForms)
+                {
+                    if (sourceForm == null)
+                        continue;
+                    if (mode == "Weakening" && sourceForm.FormType != EffectForm.EffectFormType.Condition)
+                        continue;
+
+                    EffectForm copy = EffectForm.GetCopy(sourceForm);
+                    if (copy == null)
+                        continue;
+
+                    if (mode == "Weakening")
+                    {
+                        object conditionForm = ReadMemberObject(copy, "ConditionForm");
+                        if (conditionForm == null || weakeningCondition == null ||
+                            !SetMember(conditionForm, "ConditionDefinition", weakeningCondition) ||
+                            !SetMember(conditionForm, "conditionDefinitionName", weakeningCondition.Name))
+                        {
+                            Debug.LogError(LogPrefix + "Could not substitute the custom Weakening condition for " + displayName + ".");
+                            return false;
+                        }
+                        if (!SetMember(copy, "hasSavingThrow", true) ||
+                            !SetEnumMember(copy, "savingThrowAffinity", "Negates"))
+                        {
+                            Debug.LogError(LogPrefix + "Could not retain the saving throw on the Weakening condition for " + displayName + ".");
+                            return false;
+                        }
+                    }
+
+                    weaponForms.Add(copy);
+                    copied++;
+                }
+
+                if (copied == 0)
+                {
+                    Debug.LogError(LogPrefix + "No applicable effect forms found in " + sourceSpell.Name + " for " + displayName + ".");
+                    return false;
+                }
+
+                CopyLongswordEffectMetadata(sourceDescription, weaponEffect);
+                if (mode == "Weakening")
+                {
+                    bool weakeningSaveConfigured =
+                        SetMember(weaponEffect, "hasSavingThrow", true) &&
+                        SetEnumMember(weaponEffect, "difficultyClassComputation", "FixedValue") &&
+                        SetMember(weaponEffect, "fixedSavingThrowDifficultyClass", 11) &&
+                        SetMember(weaponEffect, "savingThrowAbility", "Strength") &&
+                        SetEnumMember(weaponEffect, "durationType", "Round") &&
+                        SetMember(weaponEffect, "durationParameter", 1);
+                    if (!weakeningSaveConfigured)
+                    {
+                        Debug.LogError(LogPrefix + "Could not configure the DC 11 Strength save for " + displayName + ".");
+                        return false;
+                    }
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Could not build on-hit forms for " + displayName + ": " + ex);
+                return false;
+            }
+        }
+
+        private static EffectForm CreateMagicalLongswordDamageEffectForm(string damageType)
+        {
+            try
+            {
+                // The weapon adds a single native damage form. It does not cast a spell.
+                EffectForm effectForm = new EffectForm();
+                effectForm.DamageForm = new DamageForm();
+                effectForm.FormType = EffectForm.EffectFormType.Damage;
+                effectForm.DamageForm.DiceNumber = 1;
+                effectForm.DamageForm.DieType = RuleDefinitions.DieType.D6;
+                effectForm.DamageForm.DamageType = damageType;
+                effectForm.HasSavingThrow = false;
+                effectForm.SavingThrowAffinity = RuleDefinitions.EffectSavingThrowType.None;
+                return effectForm;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Could not construct a direct 1d6 " + damageType + " damage form: " + ex);
+                return null;
+            }
+        }
+
+        private static bool InitializeMagicalLongswordWeakeningPatch()
+        {
+            if (magicalLongswordWeakeningPatchInitialized)
+                return true;
+
+            try
+            {
+                MethodInfo target = HarmonyLib.AccessTools.Method(
+                    typeof(RulesetActor),
+                    "ComputeBaseSavingThrowBonus",
+                    new[] { typeof(string), typeof(List<RuleDefinitions.TrendInfo>) });
+                MethodInfo postfix = typeof(WeaponFactory).GetMethod(
+                    nameof(ApplyMagicalLongswordWeakeningPenalty),
+                    BindingFlags.Static | BindingFlags.NonPublic);
+
+                if (target == null || postfix == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not locate the saving throw method for the Weakening sword.");
+                    return false;
+                }
+
+                HarmonyLib.Harmony harmony = new HarmonyLib.Harmony(
+                    "SolastaExpandedEquipmentMod.MagicalLongswordWeakening");
+                harmony.Patch(target, postfix: new HarmonyLib.HarmonyMethod(postfix));
+                magicalLongswordWeakeningPatchInitialized = true;
+                Debug.Log(LogPrefix + "Weakening longsword Strength-save penalty patch initialized.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Could not initialize the Weakening longsword save patch: " + ex);
+                return false;
+            }
+        }
+
+        private static void ApplyMagicalLongswordWeakeningPenalty(
+            RulesetActor __instance,
+            string abilityScoreName,
+            List<RuleDefinitions.TrendInfo> savingThrowModifierTrends,
+            ref int __result)
+        {
+            if (__instance == null || !string.Equals(abilityScoreName, "Strength", StringComparison.Ordinal) ||
+                __instance.AllConditions == null)
+                return;
+
+            foreach (RulesetCondition activeCondition in __instance.AllConditions)
+            {
+                if (activeCondition == null || activeCondition.ConditionDefinition == null ||
+                    !string.Equals(activeCondition.ConditionDefinition.Name,
+                        MagicalLongswordWeakeningConditionId, StringComparison.Ordinal))
+                    continue;
+
+                __result -= 2;
+                if (savingThrowModifierTrends != null)
+                {
+                    savingThrowModifierTrends.Add(new RuleDefinitions.TrendInfo(
+                        -2,
+                        RuleDefinitions.FeatureSourceType.Condition,
+                        "Longsword Weakening",
+                        activeCondition.ConditionDefinition));
+                }
+                break;
+            }
+        }
+
+        private static ConditionDefinition GetOrCreateMagicalLongswordWeakeningCondition(
+            Database<ConditionDefinition> conditionDb)
+        {
+            if (conditionDb == null)
+                return null;
+
+            ConditionDefinition existing = conditionDb.GetElement(
+                MagicalLongswordWeakeningConditionId, true);
+            if (existing != null)
+                return existing;
+
+            ConditionDefinition enfeebled = conditionDb.GetElement("ConditionEnfeebled", true);
+            if (enfeebled == null || enfeebled.GuiPresentation == null)
+            {
+                Debug.LogError(LogPrefix + "Could not find the native ConditionEnfeebled template.");
+                return null;
+            }
+
+            try
+            {
+                ConditionDefinition weakening = UnityEngine.Object.Instantiate(enfeebled);
+                if (weakening == null)
+                    return null;
+
+                weakening.ForceName(MagicalLongswordWeakeningConditionId);
+                weakening.SetUserContentGUID(Guid.NewGuid().ToString());
+                weakening.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(enfeebled.GuiPresentation);
+                presentation.Title = "Weakening";
+                presentation.Description =
+                    "The creature deals half damage with Strength-based attacks and takes a -2 penalty to Strength saving throws.";
+
+                if (!SetField(weakening, "guiPresentation", presentation))
+                {
+                    Debug.LogError(LogPrefix + "Could not assign the Weakening condition presentation.");
+                    UnityEngine.Object.Destroy(weakening);
+                    return null;
+                }
+
+                conditionDb.Add(weakening);
+                ConditionDefinition registered = conditionDb.GetElement(
+                    MagicalLongswordWeakeningConditionId, true);
+                if (registered == null)
+                {
+                    Debug.LogError(LogPrefix + "Weakening condition database verification failed.");
+                    return null;
+                }
+
+                Debug.Log(LogPrefix + "Registered custom Weakening condition with the native Enfeebled effect and -2 Strength-save penalty.");
+                return registered;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Could not register the custom Weakening condition: " + ex);
+                return null;
+            }
+        }
+
+        private static EffectForm CreateMagicalLongswordConditionForm(ConditionDefinition condition, bool requiresSavingThrow)
+        {
+            if (condition == null)
+                return null;
+
+            try
+            {
+                object conditionForm = FormatterServices.GetUninitializedObject(typeof(ConditionForm));
+                object effectForm = FormatterServices.GetUninitializedObject(typeof(EffectForm));
+                if (conditionForm == null || effectForm == null)
+                    return null;
+
+                object emptyConditionsList = CreateEmptyCollection(
+                    conditionForm, "conditionsList", typeof(ConditionDefinition));
+
+                bool conditionConfigured =
+                    SetEnumMember(conditionForm, "Operation", "Add") &&
+                    SetMember(conditionForm, "ConditionDefinition", condition) &&
+                    SetMember(conditionForm, "conditionDefinitionName", condition.Name) &&
+                    SetMember(conditionForm, "applyToSelf", false) &&
+                    SetMember(conditionForm, "forceOnSelf", false) &&
+                    emptyConditionsList != null &&
+                    SetMember(conditionForm, "conditionsList", emptyConditionsList);
+
+                bool effectConfigured =
+                    SetEnumMember(effectForm, "FormType", "Condition") &&
+                    SetMember(effectForm, "ConditionForm", conditionForm) &&
+                    SetMember(effectForm, "createdByCharacter", true) &&
+                    SetMember(effectForm, "createdByCondition", false) &&
+                    SetMember(effectForm, "hasSavingThrow", requiresSavingThrow) &&
+                    SetEnumMember(effectForm, "savingThrowAffinity", requiresSavingThrow ? "Negates" : "None") &&
+                    SetEnumMember(effectForm, "saveOccurence", "StartOfTurn") &&
+                    SetMember(effectForm, "canSaveToCancel", false) &&
+                    SetMember(effectForm, "dcModifier", 0);
+
+                if (!conditionConfigured || !effectConfigured)
+                    return null;
+
+                return effectForm as EffectForm;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Could not create magical longsword condition form: " + ex);
+                return null;
+            }
+        }
+
+        private static void CopyLongswordEffectMetadata(EffectDescription source, object destination)
+        {
+            string[] members =
+            {
+                "HasSavingThrow", "SavingThrowAbility", "DifficultyClassComputation",
+                "SavingThrowDifficultyAbility", "FixedSavingThrowDifficultyClass",
+                "DurationType", "DurationParameter", "EndOfEffect", "HasShoveRoll"
+            };
+            foreach (string member in members)
+            {
+                object value = ReadMemberObject(source, member);
+                if (value != null)
+                    SetMember(destination, char.ToLowerInvariant(member[0]) + member.Substring(1), value);
             }
         }
 

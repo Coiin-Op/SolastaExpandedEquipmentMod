@@ -76,13 +76,13 @@ namespace SolastaExpandedEquipmentMod
                 Debug.Log(
                     "[SEE CombatDiagnostic] CALL #" + loggedCalls);
 
-                // The RulesetCharacter instance is the defender.
-                LogIdentity("DEFENDER", __instance);
+                // ComputeAttackModifier is called on the ATTACKING character.
+                LogIdentity("ATTACKER", __instance);
 
-                // Argument zero is the attacker.
+                // Argument zero is the DEFENDER / target.
                 if (__args != null && __args.Length > 0)
                 {
-                    LogIdentity("ATTACKER", __args[0]);
+                    LogIdentity("DEFENDER", __args[0]);
                 }
 
                 // Log the argument types and modifier-related values.

@@ -49,11 +49,8 @@ namespace SolastaExpandedEquipmentMod
                 "ChainMailPlus1OfLesserRestoration", "Cleric's Chain Mail +1 of Lesser Restoration",
                 1, "Rare", "LesserRestoration", 0);
 
-            // Paladin-themed chain mail: Blessing of the Elements is represented
-            // by the game's spell, if present in this database.
-            success &= RegisterSpell(itemDb, sourceId, baseArmorClass,
-                "ChainMailPlus1OfBlessingOfTheElements", "Paladin's Chain Mail +1 of Blessing of the Elements",
-                1, "Rare", "BlessingOfTheElements", 0);
+            // The base game has no BlessingOfTheElements spell definition,
+            // so the unsupported Paladin variant is intentionally omitted.
 
             return success;
         }

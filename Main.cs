@@ -1,6 +1,6 @@
-﻿using System;
-using UnityModManagerNet;
 
+using System;
+using UnityModManagerNet;
 using UnityEngine;
 
 namespace SolastaExpandedEquipmentMod
@@ -8,27 +8,69 @@ namespace SolastaExpandedEquipmentMod
     public static class Main
     {
         private static UnityModManager.ModEntry mod;
+
         private static bool equipmentRegistered;
+
+        private static bool itemDatabaseReadyLogged;
+        private static bool spellDatabaseReadyLogged;
+        private static bool waitingForDatabasesLogged;
+
         private static float nextEquipmentRegistrationAttemptTime;
         private static float nextEquipmentRegistrationRetryLogTime;
 
         public static bool Load(UnityModManager.ModEntry entry)
         {
             mod = entry;
-            CombatDiagnostic.Initialize();
-            BeastSlayerCombatPatch.Initialize();
-            AmmunitionEffectProxyPatch.Initialize();
-            SpellSlotRingPatch.Initialize();
-            ArmorDailyLootPatch.Initialize();
-            ArmorDamageReductionDiagnostic.Initialize();
-            ActiveEquipmentBonusesTooltip.Initialize();
+
+            // Start diagnostics before any SEE initializers.
+            StartupDiagnostic.Initialize(entry);
+            StartupDiagnostic.Checkpoint("Main.Load entered");
+
+            StartupDiagnostic.RunStep(
+                "CombatDiagnostic.Initialize",
+                () => CombatDiagnostic.Initialize());
+
+            StartupDiagnostic.RunStep(
+                "BeastSlayerCombatPatch.Initialize",
+                () => BeastSlayerCombatPatch.Initialize());
+
+            // Deliberately disabled during shield-patch isolation.
+            // Do not uncomment without a separate controlled test.
+            // ShieldCombatPatch.Initialize();
+
+            StartupDiagnostic.RunStep(
+                "AmmunitionEffectProxyPatch.Initialize",
+                () => AmmunitionEffectProxyPatch.Initialize());
+
+            StartupDiagnostic.RunStep(
+                "SpellSlotRingPatch.Initialize",
+                () => SpellSlotRingPatch.Initialize());
+
+            StartupDiagnostic.RunStep(
+                "ArmorDailyLootPatch.Initialize",
+                () => ArmorDailyLootPatch.Initialize());
+
+            StartupDiagnostic.RunStep(
+                "ArmorDamageReductionDiagnostic.Initialize",
+                () => ArmorDamageReductionDiagnostic.Initialize());
+
+            StartupDiagnostic.RunStep(
+                "ActiveEquipmentBonusesTooltip.Initialize",
+                () => ActiveEquipmentBonusesTooltip.Initialize());
+
             entry.OnUpdate = OnUpdate;
 
-            // Initialize the armor registration system.
-            ArmorRegistration.Initialize(entry);
+            StartupDiagnostic.Checkpoint(
+                "OnUpdate callback assigned");
+
+            StartupDiagnostic.RunStep(
+                "ArmorRegistration.Initialize",
+                () => ArmorRegistration.Initialize(entry));
 
             mod.Logger.Log(
                 "[SolastaExpandedEquipmentMod] Loaded. Waiting for game databases.");
+
+            StartupDiagnostic.Checkpoint("Main.Load completed");
 
             return true;
         }
@@ -42,33 +84,71 @@ namespace SolastaExpandedEquipmentMod
 
             try
             {
-                // The game database may not be ready immediately after loading.
                 Database<ItemDefinition> itemDb =
                     DatabaseRepository.GetDatabase<ItemDefinition>();
 
                 Database<SpellDefinition> spellDb =
                     DatabaseRepository.GetDatabase<SpellDefinition>();
 
-                // Wait until both databases exist before registering any equipment.
-                if (itemDb == null || spellDb == null)
-                    return;
-
-                if (Time.realtimeSinceStartup < nextEquipmentRegistrationAttemptTime)
-                    return;
-
-                // Some definitions are added by other mods after the base item database exists.
-                // Retry periodically instead of calling every registrar every frame.
-                nextEquipmentRegistrationAttemptTime = Time.realtimeSinceStartup + 2f;
-
-                // Register equipment through the central registry.
-                if (!EquipmentRegistry.RegisterAll())
+                // Log database readiness only when its state changes.
+                if (itemDb != null && !itemDatabaseReadyLogged)
                 {
-                    if (Time.realtimeSinceStartup >= nextEquipmentRegistrationRetryLogTime)
+                    itemDatabaseReadyLogged = true;
+
+                    StartupDiagnostic.Checkpoint(
+                        "ItemDefinition database is READY");
+                }
+
+                if (spellDb != null && !spellDatabaseReadyLogged)
+                {
+                    spellDatabaseReadyLogged = true;
+
+                    StartupDiagnostic.Checkpoint(
+                        "SpellDefinition database is READY");
+                }
+
+                // Wait until both databases exist.
+                if (itemDb == null || spellDb == null)
+                {
+                    if (!waitingForDatabasesLogged)
                     {
-                        mod.Logger.Log(
-                            "[SolastaExpandedEquipmentMod] Registration is incomplete. Will retry in about 2 seconds.");
-                        nextEquipmentRegistrationRetryLogTime = Time.realtimeSinceStartup + 10f;
+                        waitingForDatabasesLogged = true;
+
+                        StartupDiagnostic.Checkpoint(
+                            "Waiting for game databases");
                     }
+
+                    return;
+                }
+
+                if (Time.realtimeSinceStartup <
+                    nextEquipmentRegistrationAttemptTime)
+                {
+                    return;
+                }
+
+                // Retry registration every two seconds.
+                nextEquipmentRegistrationAttemptTime =
+                    Time.realtimeSinceStartup + 2f;
+
+                StartupDiagnostic.Checkpoint(
+                    "EquipmentRegistry.RegisterAll BEGIN");
+
+                bool registrationComplete =
+                    EquipmentRegistry.RegisterAll();
+
+                if (!registrationComplete)
+                {
+                    if (Time.realtimeSinceStartup >=
+                        nextEquipmentRegistrationRetryLogTime)
+                    {
+                        StartupDiagnostic.Checkpoint(
+                            "Equipment registration incomplete; retry scheduled");
+
+                        nextEquipmentRegistrationRetryLogTime =
+                            Time.realtimeSinceStartup + 10f;
+                    }
+
                     return;
                 }
 
@@ -76,9 +156,15 @@ namespace SolastaExpandedEquipmentMod
 
                 mod.Logger.Log(
                     "[SolastaExpandedEquipmentMod] Equipment registration completed.");
+
+                StartupDiagnostic.Checkpoint(
+                    "Equipment registration completed successfully");
             }
             catch (Exception ex)
             {
+                StartupDiagnostic.LogException(
+                    "Main.OnUpdate", ex);
+
                 mod.Logger.Error(
                     "[SolastaExpandedEquipmentMod] Initialization error: " + ex);
             }

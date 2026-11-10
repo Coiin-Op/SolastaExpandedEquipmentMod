@@ -14,14 +14,13 @@ namespace SolastaExpandedEquipmentMod
         private static bool wizardRegistered, sorcererRegistered, warlockRegistered, druidRegistered;
         private static bool plateRegistered, clericPlateRegistered, halfPlateRegistered;
         private static bool breastplateRegistered, chainMailRegistered, chainShirtRegistered;
-        private static bool scaleMailRegistered, hideRegistered, studdedLeatherRegistered;
-        private static bool paddedRegistered, leatherRegistered;
+        private static bool scaleMailRegistered, hideRegistered, studdedLeatherRegistered, leatherRegistered;
 
         private static bool wizardFailureReported, sorcererFailureReported, warlockFailureReported, druidFailureReported;
         private static bool plateFailureReported, clericPlateFailureReported, halfPlateFailureReported;
         private static bool breastplateFailureReported, chainMailFailureReported, chainShirtFailureReported;
         private static bool scaleMailFailureReported, hideFailureReported, studdedLeatherFailureReported;
-        private static bool paddedFailureReported, leatherFailureReported;
+        private static bool leatherFailureReported;
 
         public static void Initialize(UnityModManager.ModEntry entry)
         {
@@ -73,8 +72,6 @@ namespace SolastaExpandedEquipmentMod
                     ref hideFailureReported, () => HideArmor.Register(itemDb, mod));
                 studdedLeatherRegistered = RegisterFamily(itemDb, "Studded leather armor", studdedLeatherRegistered,
                     ref studdedLeatherFailureReported, () => StuddedLeatherArmor.Register(itemDb, mod));
-                paddedRegistered = RegisterFamily(itemDb, "Padded armor", paddedRegistered,
-                    ref paddedFailureReported, () => PaddedArmor.Register(itemDb, mod));
                 leatherRegistered = RegisterFamily(itemDb, "Leather armor", leatherRegistered,
                     ref leatherFailureReported, () => LeatherArmor.Register(itemDb, mod));
 
@@ -82,7 +79,7 @@ namespace SolastaExpandedEquipmentMod
                        plateRegistered && clericPlateRegistered && halfPlateRegistered &&
                        breastplateRegistered && chainMailRegistered && chainShirtRegistered &&
                        scaleMailRegistered && hideRegistered && studdedLeatherRegistered &&
-                       paddedRegistered && leatherRegistered;
+                       leatherRegistered;
             }
             catch (Exception ex)
             {

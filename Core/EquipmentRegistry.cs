@@ -17,6 +17,7 @@ namespace SolastaExpandedEquipmentMod
         private static bool stavesRegistered;
         private static bool ammunitionRegistered;
         private static bool cloaksRegistered;
+        private static bool shieldsRegistered;
 
         private static bool armorFailureReported;
         private static bool weaponsFailureReported;
@@ -27,10 +28,11 @@ namespace SolastaExpandedEquipmentMod
         private static bool stavesFailureReported;
         private static bool ammunitionFailureReported;
         private static bool cloaksFailureReported;
+        private static bool shieldsFailureReported;
 
         // Temporary picker-isolation switches. Rings and Wands are enabled;
         // WandItems.cs further narrows registration to one wand at a time.
-        // Staves remain skipped. All other categories, including Cloaks, stay enabled.
+        // Staves remain skipped. All other categories, including Cloaks and Shields, stay enabled.
         private const bool DIAGNOSTIC_SKIP_RINGS = false;
         private const bool DIAGNOSTIC_SKIP_WANDS = false;
         private const bool DIAGNOSTIC_SKIP_STAVES = true;
@@ -86,6 +88,10 @@ namespace SolastaExpandedEquipmentMod
                 "Cloaks", cloaksRegistered, ref cloaksFailureReported,
                 () => CloaksItems.Register());
 
+            shieldsRegistered = RegisterCategory(
+                "Shields", shieldsRegistered, ref shieldsFailureReported,
+                () => ShieldItems.Register());
+
             // Inspect all custom item definitions after each registration pass.
             // This records the exact definition if an item was created without the
             // GUI metadata that the game's item picker expects.
@@ -99,7 +105,8 @@ namespace SolastaExpandedEquipmentMod
                    glovesRegistered &&
                    stavesRegistered &&
                    ammunitionRegistered &&
-                   cloaksRegistered;
+                   cloaksRegistered &&
+                   shieldsRegistered;
         }
 
         private static void DiagnoseItemPickerDefinitions()

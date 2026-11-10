@@ -146,7 +146,8 @@ namespace SolastaExpandedEquipmentMod
                 if (MissingSpellWarningsLogged.Add(spellId))
                     Debug.LogWarning(LogPrefix + (spellDb == null
                         ? "Spell database unavailable"
-                        : "Could not find spell '" + spellId + "'") + " for " + title + ". Registering the armor now and retrying spell setup later.");
+                        : "Could not find spell '" + spellId + "'") + " for " + title +
+                        ". Registering the armor now and retrying spell setup later.");
             }
 
             List<FeatureDefinition> featureList = new List<FeatureDefinition>();

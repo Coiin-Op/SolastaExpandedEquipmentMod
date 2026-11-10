@@ -60,7 +60,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Core\ActiveEquipmentBonusesTooltip.cs" />
+    <Compile Include="Core\StartupDiagnostic.cs" />
     <Compile Include="Equipment\Armor\CloaksItems.cs" />
+    <Compile Include="Equipment\Armor\ShieldCombatPatch.cs" />
+    <Compile Include="Equipment\Armor\ShieldItems.cs" />
     <Compile Include="Equipment\Weapons\AmmunitionItems.cs" />
     <Compile Include="Class1.cs" />
     <Compile Include="Core\ArmorDamageReductionDiagnostic.cs" />
@@ -72,7 +75,6 @@
     <Compile Include="Equipment\Armor\ChainShirtArmor.cs" />
     <Compile Include="Equipment\Armor\HideArmor.cs" />
     <Compile Include="Equipment\Armor\LeatherArmor.cs" />
-    <Compile Include="Equipment\Armor\PaddedArmor.cs" />
     <Compile Include="Equipment\Armor\PlateArmor.cs" />
     <Compile Include="Equipment\Armor\ClericPlateArmor.cs" />
     <Compile Include="Equipment\Armor\HalfPlateArmor.cs" />
