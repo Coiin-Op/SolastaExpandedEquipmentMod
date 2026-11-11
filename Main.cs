@@ -34,6 +34,10 @@ namespace SolastaExpandedEquipmentMod
                 "BeastSlayerCombatPatch.Initialize",
                 () => BeastSlayerCombatPatch.Initialize());
 
+            StartupDiagnostic.RunStep(
+                "QuicknessDaggerAttackPatch.Initialize",
+                () => QuicknessDaggerAttackPatch.Initialize());
+
             // Deliberately disabled during shield-patch isolation.
             // Do not uncomment without a separate controlled test.
             // ShieldCombatPatch.Initialize();

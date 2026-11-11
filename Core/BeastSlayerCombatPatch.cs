@@ -94,11 +94,13 @@ namespace SolastaExpandedEquipmentMod
 
                 // Preserve the existing Slayer weapon rules exactly: target-family
                 // matches are alternatives, not cumulative requirements.
-                bool matchedSlayerRule =
-                    (isBeastTarget && IsBeastSlayerAttack(attackMode)) ||
-                    (isFeyTarget && IsFeySlayerAttack(attackMode)) ||
-                    (isMagicalTarget && IsMagicalSlayerAttack(attackMode)) ||
-                    IsCreatureFamilySlayerLongsword(attackMode, defender, defenderFamily);
+                int conditionalSlayerBonus =
+                    ((isBeastTarget && IsBeastSlayerAttack(attackMode)) ||
+                     (isFeyTarget && IsFeySlayerAttack(attackMode)) ||
+                     (isMagicalTarget && IsMagicalSlayerAttack(attackMode)))
+                        ? 1
+                        : GetCreatureFamilySlayerLongswordBonus(attackMode, defender, defenderFamily);
+                bool matchedSlayerRule = conditionalSlayerBonus > 0;
 
                 // Creature-family shields protect only the currently equipped defender,
                 // and only from an attacker matching the shield's configured family.
@@ -142,9 +144,9 @@ namespace SolastaExpandedEquipmentMod
                     // The weapon already supplies its base +1. Add only +1 here,
                     // preserving the original +2 total against its matching family.
                     slayerAttackChanged = AddToNumericMember(actionModifier,
-                        new[] { "AttackRollModifier", "attackRollModifier" }, 1);
+                        new[] { "AttackRollModifier", "attackRollModifier" }, conditionalSlayerBonus);
                     slayerDamageChanged = AddToNumericMember(actionModifier,
-                        new[] { "DamageRollModifier", "damageRollModifier" }, 1);
+                        new[] { "DamageRollModifier", "damageRollModifier" }, conditionalSlayerBonus);
                 }
 
                 if (additionalShieldBonus > 0)
@@ -177,7 +179,9 @@ namespace SolastaExpandedEquipmentMod
 
                 if (matchedSlayerRule)
                 {
-                    LogMatchingCall("Conditional +1 attack and +1 damage against " + defenderFamily + ". " +
+                    LogMatchingCall("Conditional +" + conditionalSlayerBonus +
+                        " attack and +" + conditionalSlayerBonus +
+                        " damage against " + defenderFamily + ". " +
                         "Attacker=" + DescribeCharacter(__instance) +
                         "; Defender=" + DescribeCharacter(defender) +
                         "; AttackMode=" + DescribeAttackMode(attackMode) +
@@ -553,7 +557,7 @@ namespace SolastaExpandedEquipmentMod
             return new string(chars.ToArray());
         }
 
-        private static bool IsCreatureFamilySlayerLongsword(
+        private static int GetCreatureFamilySlayerLongswordBonus(
             object attackMode,
             object defender,
             string defenderFamily)
@@ -562,38 +566,126 @@ namespace SolastaExpandedEquipmentMod
             // so avoid repeating a full reflection scan for every possible family.
             string weaponName = FindCreatureFamilySlayerLongswordName(attackMode);
             if (string.IsNullOrEmpty(weaponName))
-                return false;
+                return 0;
 
             // Each longsword adds +1 attack and +1 damage against its matching family.
             // The weapon's own feature already supplies its universal +1/+1 bonus.
-            if (WeaponNameIs(weaponName, "LongswordVsGiantsPlus1"))
-                return FamilyIs(defenderFamily, "Giant");
-            if (WeaponNameIs(weaponName, "LongswordVsAberrationsPlus1"))
-                return FamilyIs(defenderFamily, "Aberration");
-            if (WeaponNameIs(weaponName, "LongswordVsArtificerConstructsPlus1"))
-                return IsArtificerConstruct(defender, defenderFamily);
-            if (WeaponNameIs(weaponName, "LongswordVsCelestialsPlus1"))
-                return FamilyIs(defenderFamily, "Celestial");
-            if (WeaponNameIs(weaponName, "LongswordVsConstructsPlus1"))
-                return FamilyIs(defenderFamily, "Construct") &&
-                       !IsArtificerConstruct(defender, defenderFamily);
-            if (WeaponNameIs(weaponName, "LongswordVsElementalsPlus1"))
-                return FamilyIs(defenderFamily, "Elemental");
-            if (WeaponNameIs(weaponName, "LongswordVsFeyPlus1"))
-                return FamilyIs(defenderFamily, "Fey");
-            if (WeaponNameIs(weaponName, "LongswordVsHumanoidsPlus1"))
-                return FamilyIs(defenderFamily, "Humanoid");
-            if (WeaponNameIs(weaponName, "LongswordVsMonstrositiesPlus1"))
-                return FamilyIs(defenderFamily, "Monstrosity");
-            if (WeaponNameIs(weaponName, "LongswordVsPlantsPlus1"))
-                return FamilyIs(defenderFamily, "Plant");
-            if (WeaponNameIs(weaponName, "LongswordVsUndeadPlus1"))
-                return FamilyIs(defenderFamily, "Undead");
-            if (WeaponNameIs(weaponName, "LongswordVsSorrAkkathPlus1"))
-                return IsSorrAkkath(defender, defenderFamily);
-            if (WeaponNameIs(weaponName, "LongswordVsDragonsPlus1"))
-                return FamilyIs(defenderFamily, "Dragon");
+            if (WeaponNameIs(weaponName, "LongswordVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
 
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsSorrAkkathPlus3")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsGoblinoidsPlus3")) return MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus2VsDragonsPlus3")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+
+            // These three weapons are +3 only against their named creature family.
+            // They carry no universal attack/damage modifier on the item itself.
+            if (WeaponNameIs(weaponName, "LongswordPlus3VsSorrAkkath")) return IsSorrAkkath(defender, defenderFamily) ? 3 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+            if (WeaponNameIs(weaponName, "LongswordPlus3VsUndead")) return FamilyIs(defenderFamily, "Undead") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "ShortswordVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+
+            // Dagger +1 weapons gain an additional +1 attack and +1 damage against
+            // their designated creature family, for +2/+2 total against that family.
+            if (WeaponNameIs(weaponName, "DaggerVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+
+            // Dagger +2 slayers gain +1 attack and damage against their target.
+            // The combined Giants/Fey dagger grants +1 vs Giants and +2 vs Fey.
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsGoblinoidsPlus3")) return MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "DaggerPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsGoblinoidsPlus3")) return MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortswordPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            return 0;
+        }
+
+        private static bool MatchesTarget(object defender, string defenderFamily, string token)
+        {
+            if (FamilyIs(defenderFamily, token)) return true;
+            foreach (string memberName in new[] { "Name", "CharacterName", "OriginalFormCharacterName",
+                "MonsterDefinition", "CharacterDefinition", "RaceDefinition", "AncestryDefinition" })
+            {
+                object value = ReadMemberObject(defender, memberName);
+                string text = value == null ? null : ReadMember(value, "Name") ?? SafeToString(value);
+                if (!string.IsNullOrEmpty(text) &&
+                    text.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
             return false;
         }
 
@@ -650,8 +742,15 @@ namespace SolastaExpandedEquipmentMod
         private static bool IsCreatureFamilyLongswordName(string value)
         {
             return !string.IsNullOrEmpty(value) &&
-                value.IndexOf("LongswordVs", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                value.IndexOf("Plus1", StringComparison.OrdinalIgnoreCase) >= 0;
+                (value.IndexOf("LongswordVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongswordPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongswordPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ShortswordVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ShortswordPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ShortswordPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("DaggerVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("DaggerPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("DaggerPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private static bool WeaponNameIs(string actual, string expected)

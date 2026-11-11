@@ -40,56 +40,64 @@ namespace SolastaExpandedEquipmentMod
         private static bool wandsSkipReported;
         private static bool stavesSkipReported;
 
+        // TEMPORARY STARTUP ISOLATION TEST:
+        // This test combines the original Group 1 with Gloves only from Group 2.
+        // Enabled: Armor, Weapons, Rings, Wands, Boots, Gloves.
+        // Skipped: Staves, Ammunition, Cloaks, and Shields.
+        private const int DIAGNOSTIC_ACTIVE_GROUP = 1;
+        private static readonly HashSet<string> reportedGroupSkippedCategories =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         // Avoid repeating the same diagnostic line while registration is retrying.
         private static readonly HashSet<string> reportedPickerDefinitionProblems =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static bool RegisterAll()
         {
-            armorRegistered = RegisterCategory(
-                "Armor", armorRegistered, ref armorFailureReported,
+            armorRegistered = RegisterTestGroupCategory(
+                "Armor", 1, armorRegistered, ref armorFailureReported,
                 () => ArmorRegistration.Register());
 
-            weaponsRegistered = RegisterCategory(
-                "Weapons", weaponsRegistered, ref weaponsFailureReported,
+            weaponsRegistered = RegisterTestGroupCategory(
+                "Weapons", 1, weaponsRegistered, ref weaponsFailureReported,
                 () => WeaponRegistration.Register());
 
             ringsRegistered = DIAGNOSTIC_SKIP_RINGS
                 ? ReportSkippedCategory("Rings", ref ringsSkipReported)
-                : RegisterCategory(
-                    "Rings", ringsRegistered, ref ringsFailureReported,
+                : RegisterTestGroupCategory(
+                    "Rings", 1, ringsRegistered, ref ringsFailureReported,
                     () => RingItems.Register());
 
             wandsRegistered = DIAGNOSTIC_SKIP_WANDS
                 ? ReportSkippedCategory("Wands", ref wandsSkipReported)
-                : RegisterCategory(
-                    "Wands", wandsRegistered, ref wandsFailureReported,
+                : RegisterTestGroupCategory(
+                    "Wands", 1, wandsRegistered, ref wandsFailureReported,
                     () => WandItems.Register());
 
-            bootsRegistered = RegisterCategory(
-                "Boots", bootsRegistered, ref bootsFailureReported,
+            bootsRegistered = RegisterTestGroupCategory(
+                "Boots", 1, bootsRegistered, ref bootsFailureReported,
                 () => BootsItems.Register());
 
-            glovesRegistered = RegisterCategory(
-                "Gloves", glovesRegistered, ref glovesFailureReported,
+            glovesRegistered = RegisterTestGroupCategory(
+                "Gloves", 1, glovesRegistered, ref glovesFailureReported,
                 () => GlovesItems.Register());
 
             stavesRegistered = DIAGNOSTIC_SKIP_STAVES
                 ? ReportSkippedCategory("Staves", ref stavesSkipReported)
-                : RegisterCategory(
-                    "Staves", stavesRegistered, ref stavesFailureReported,
+                : RegisterTestGroupCategory(
+                    "Staves", 2, stavesRegistered, ref stavesFailureReported,
                     () => StaffItems.Register());
 
-            ammunitionRegistered = RegisterCategory(
-                "Arrows and bolts", ammunitionRegistered, ref ammunitionFailureReported,
+            ammunitionRegistered = RegisterTestGroupCategory(
+                "Arrows and bolts", 2, ammunitionRegistered, ref ammunitionFailureReported,
                 () => AmmunitionItems.RegisterArrowsAndBolts());
 
-            cloaksRegistered = RegisterCategory(
-                "Cloaks", cloaksRegistered, ref cloaksFailureReported,
+            cloaksRegistered = RegisterTestGroupCategory(
+                "Cloaks", 2, cloaksRegistered, ref cloaksFailureReported,
                 () => CloaksItems.Register());
 
-            shieldsRegistered = RegisterCategory(
-                "Shields", shieldsRegistered, ref shieldsFailureReported,
+            shieldsRegistered = RegisterTestGroupCategory(
+                "Shields", 2, shieldsRegistered, ref shieldsFailureReported,
                 () => ShieldItems.Register());
 
             // Inspect all custom item definitions after each registration pass.
@@ -107,6 +115,31 @@ namespace SolastaExpandedEquipmentMod
                    ammunitionRegistered &&
                    cloaksRegistered &&
                    shieldsRegistered;
+        }
+
+        private static bool RegisterTestGroupCategory(
+            string categoryName,
+            int categoryGroup,
+            bool alreadyRegistered,
+            ref bool failureReported,
+            System.Func<bool> register)
+        {
+            if (categoryGroup != DIAGNOSTIC_ACTIVE_GROUP)
+            {
+                if (reportedGroupSkippedCategories.Add(categoryName))
+                {
+                    Debug.LogWarning(
+                        "[Solasta Expanded Equipment][StartupIsolation] " +
+                        "Skipping " + categoryName + " because it belongs to diagnostic group " +
+                        categoryGroup + "; active group is " + DIAGNOSTIC_ACTIVE_GROUP + ".");
+                }
+
+                // Treat the intentionally skipped category as complete for this test.
+                return true;
+            }
+
+            return RegisterCategory(
+                categoryName, alreadyRegistered, ref failureReported, register);
         }
 
         private static void DiagnoseItemPickerDefinitions()

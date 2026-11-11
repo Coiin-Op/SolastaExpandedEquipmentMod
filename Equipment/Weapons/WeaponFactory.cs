@@ -397,6 +397,176 @@ namespace SolastaExpandedEquipmentMod
         // registered by RegisterBeastSlayerLongsword() above.
         public static bool RegisterCreatureFamilySlayerLongswords()
         {
+            return RegisterCreatureFamilySlayerWeapons("Longsword", "longsword");
+        }
+
+        public static bool RegisterCreatureFamilySlayerShortswords()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Shortsword", "shortsword");
+        }
+
+        public static bool RegisterCreatureFamilySlayerDaggers()
+        {
+            bool basicDaggersRegistered =
+                RegisterCreatureFamilySlayerWeapons("Dagger", "dagger");
+            bool advancedDaggersRegistered =
+                RegisterAdvancedCreatureFamilySlayerDaggers();
+
+            return basicDaggersRegistered && advancedDaggersRegistered;
+        }
+
+        private static bool RegisterAdvancedCreatureFamilySlayerDaggers()
+        {
+            try
+            {
+                Database<ItemDefinition> itemDb =
+                    DatabaseRepository.GetDatabase<ItemDefinition>();
+                if (itemDb == null)
+                {
+                    Debug.LogError(LogPrefix + "Item database unavailable for advanced slayer daggers.");
+                    return false;
+                }
+
+                ItemDefinition baseDagger = itemDb.GetElement("Dagger", true);
+                if (baseDagger == null || baseDagger.GuiPresentation == null)
+                {
+                    Debug.LogError(LogPrefix + "Vanilla Dagger template unavailable for advanced slayer daggers.");
+                    return false;
+                }
+
+                // These are +2 daggers universally, with +1 more against the
+                // named target. The Giants/Fey dagger is one item with two
+                // different conditional bonuses. The Dragon dagger is +3 only
+                // against Dragons and has no universal attack/damage bonus.
+                string[][] specs =
+                {
+                    new[] { "DaggerPlus2VsGoblinoidsPlus3", "Dagger +2, +3 vs Goblinoids", "Goblinoid", "2" },
+                    new[] { "DaggerPlus2VsGiantsPlus3FeyPlus4", "Dagger +2, +3 vs Giants, +4 vs Fey", "Giants and Fey", "2" },
+                    new[] { "DaggerPlus2VsDwarvesPlus3", "Dagger +2, +3 vs Dwarves", "Dwarves", "2" },
+                    new[] { "DaggerPlus2VsElvesPlus3", "Dagger +2, +3 vs Elves", "Elves", "2" },
+                    new[] { "DaggerPlus2VsHalflingsPlus3", "Dagger +2, +3 vs Halflings", "Halflings", "2" },
+                    new[] { "DaggerPlus2VsBeastsPlus3", "Dagger +2, +3 vs Beasts", "Beasts", "2" },
+                    new[] { "DaggerPlus2VsHumansPlus3", "Dagger +2, +3 vs Humans", "Humans", "2" },
+                    new[] { "DaggerPlus2VsUndeadPlus3", "Dagger +2, +3 vs Undead", "Undead", "2" },
+                    new[] { "DaggerPlus2VsAbominationsPlus3", "Dagger +2, +3 vs Abominations", "Abominations", "2" },
+                    new[] { "DaggerPlus3VsDragons", "Dagger +3 vs Dragons", "Dragons", "0" }
+                };
+
+                int succeeded = 0;
+                foreach (string[] spec in specs)
+                {
+                    int baseBonus = int.Parse(spec[3]);
+                    if (RegisterAdvancedCreatureFamilySlayerDagger(
+                        itemDb, baseDagger, spec[0], spec[1], spec[2], baseBonus))
+                    {
+                        succeeded++;
+                    }
+                }
+
+                Debug.Log(LogPrefix + "Advanced creature-family dagger registration complete: " +
+                    succeeded + "/" + specs.Length + " registered.");
+                return succeeded == specs.Length;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Advanced creature-family dagger registration failed: " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterAdvancedCreatureFamilySlayerDagger(
+            Database<ItemDefinition> itemDb,
+            ItemDefinition baseDagger,
+            string itemId,
+            string displayName,
+            string targetFamily,
+            int baseBonus)
+        {
+            try
+            {
+                ItemDefinition existing = itemDb.GetElement(itemId, true);
+                string description = baseBonus > 0
+                    ? "A magical dagger that grants +2 to attack and damage, with an additional +1 to attack and damage against " + targetFamily + "."
+                    : "A magical dagger that grants +3 to attack and damage against Dragons.";
+
+                if (existing != null)
+                {
+                    existing.IsUserContent = true;
+                    if (existing.GuiPresentation != null)
+                    {
+                        GuiPresentation existingGui = new GuiPresentation(existing.GuiPresentation);
+                        existingGui.Title = displayName;
+                        existingGui.Description = description;
+                        SetField(existing, "guiPresentation", existingGui);
+                    }
+                    Debug.Log(LogPrefix + displayName + " already exists; kept existing definition.");
+                    return true;
+                }
+
+                ItemDefinition dagger = UnityEngine.Object.Instantiate(baseDagger);
+                if (dagger == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not clone " + displayName + ".");
+                    return false;
+                }
+
+                dagger.ForceName(itemId);
+                dagger.SetUserContentGUID(Guid.NewGuid().ToString());
+                dagger.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(baseDagger.GuiPresentation);
+                presentation.Title = displayName;
+                presentation.Description = description;
+                if (!SetField(dagger, "guiPresentation", presentation) ||
+                    !SetField(dagger, "magical", true))
+                {
+                    Debug.LogError(LogPrefix + "Could not configure " + displayName + ".");
+                    return false;
+                }
+
+                if (baseBonus > 0)
+                {
+                    FeatureDefinitionAttackModifier modifier =
+                        CreateAttackModifier(itemId, displayName, baseBonus, baseDagger.GuiPresentation);
+                    if (modifier == null)
+                        return false;
+
+                    List<ItemPropertyDescription> properties = dagger.StaticProperties;
+                    if (properties == null)
+                    {
+                        properties = new List<ItemPropertyDescription>();
+                        if (!SetField(dagger, "staticProperties", properties))
+                            return false;
+                    }
+
+                    ItemPropertyDescription property =
+                        CreateFeatureProperty(itemDb, baseDagger, modifier);
+                    if (property == null)
+                        return false;
+                    properties.Add(property);
+                }
+
+                itemDb.Add(dagger);
+                if (itemDb.GetElement(itemId, true) == null)
+                {
+                    Debug.LogError(LogPrefix + "Registration verification failed for " + displayName + ".");
+                    return false;
+                }
+
+                Debug.Log(LogPrefix + "Registered " + displayName +
+                    " | BaseBonus=+" + baseBonus + " | ConditionalBonus=" +
+                    (baseBonus > 0 ? "+1 vs target" : "+3 vs Dragons"));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Failed to register " + displayName + ": " + ex);
+                return false;
+            }
+        }
+
+        private static bool RegisterCreatureFamilySlayerWeapons(string baseWeaponId, string weaponType)
+        {
             try
             {
                 Database<ItemDefinition> itemDb =
@@ -408,15 +578,46 @@ namespace SolastaExpandedEquipmentMod
                     return false;
                 }
 
-                ItemDefinition baseSword = itemDb.GetElement("Longsword", true);
+                ItemDefinition baseSword = itemDb.GetElement(baseWeaponId, true);
                 if (baseSword == null || baseSword.GuiPresentation == null)
                 {
-                    Debug.LogError(LogPrefix + "Vanilla Longsword template unavailable or incomplete.");
+                    Debug.LogError(LogPrefix + "Vanilla " + weaponType + " template unavailable or incomplete.");
                     return false;
                 }
 
-                // Item IDs are unique and do not replace any of the existing Slayer weapons.
-                string[][] specs =
+                string[][] specs = weaponType == "dagger" ? new string[][]
+                {
+                    new[] { "DaggerVsGiantsPlus1", "Dagger +1, +2 vs Giants", "Giants" },
+                    new[] { "DaggerVsAberrationsPlus1", "Dagger +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "DaggerVsArtificerConstructsPlus1", "Dagger +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "DaggerVsBeastsPlus1", "Dagger +1, +2 vs Beasts", "Beasts" },
+                    new[] { "DaggerVsCelestialsPlus1", "Dagger +1, +2 vs Celestials", "Celestials" },
+                    new[] { "DaggerVsConstructsPlus1", "Dagger +1, +2 vs Constructs", "Constructs" },
+                    new[] { "DaggerVsElementalsPlus1", "Dagger +1, +2 vs Elementals", "Elementals" },
+                    new[] { "DaggerVsFeyPlus1", "Dagger +1, +2 vs Fey", "Fey" },
+                    new[] { "DaggerVsHumanoidsPlus1", "Dagger +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "DaggerVsMonstrositiesPlus1", "Dagger +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "DaggerVsPlantsPlus1", "Dagger +1, +2 vs Plants", "Plants" },
+                    new[] { "DaggerVsUndeadPlus1", "Dagger +1, +2 vs Undead", "Undead" },
+                    new[] { "DaggerVsSorrAkkathPlus1", "Dagger +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "DaggerVsDragonsPlus1", "Dagger +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "shortsword" ? new string[][]
+                {
+                    new[] { "ShortswordVsGiantsPlus1", "Shortsword +1, +2 vs Giants", "Giants" },
+                    new[] { "ShortswordVsAberrationsPlus1", "Shortsword +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "ShortswordVsArtificerConstructsPlus1", "Shortsword +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "ShortswordVsBeastsPlus1", "Shortsword +1, +2 vs Beasts", "Beasts" },
+                    new[] { "ShortswordVsCelestialsPlus1", "Shortsword +1, +2 vs Celestials", "Celestials" },
+                    new[] { "ShortswordVsConstructsPlus1", "Shortsword +1, +2 vs Constructs", "Constructs" },
+                    new[] { "ShortswordVsElementalsPlus1", "Shortsword +1, +2 vs Elementals", "Elementals" },
+                    new[] { "ShortswordVsFeyPlus1", "Shortsword +1, +2 vs Fey", "Fey" },
+                    new[] { "ShortswordVsHumanoidsPlus1", "Shortsword +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "ShortswordVsMonstrositiesPlus1", "Shortsword +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "ShortswordVsPlantsPlus1", "Shortsword +1, +2 vs Plants", "Plants" },
+                    new[] { "ShortswordVsUndeadPlus1", "Shortsword +1, +2 vs Undead", "Undead" },
+                    new[] { "ShortswordVsSorrAkkathPlus1", "Shortsword +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "ShortswordVsDragonsPlus1", "Shortsword +1, +2 vs Dragons", "Dragons" }
+                } : new string[][]
                 {
                     new[] { "LongswordVsGiantsPlus1", "Longsword +1, +2 vs Giants", "Giants" },
                     new[] { "LongswordVsAberrationsPlus1", "Longsword +1, +2 vs Aberrations", "Aberrations" },
@@ -436,32 +637,32 @@ namespace SolastaExpandedEquipmentMod
                 int succeeded = 0;
                 foreach (string[] spec in specs)
                 {
-                    if (RegisterCreatureFamilySlayerLongsword(
-                        itemDb, baseSword, spec[0], spec[1], spec[2]))
+                    if (RegisterCreatureFamilySlayerWeapon(
+                        itemDb, baseSword, spec[0], spec[1], spec[2], weaponType))
                     {
                         succeeded++;
                     }
                 }
 
-                Debug.Log(LogPrefix + "Creature-family longsword registration complete: " +
-                    succeeded + "/" + specs.Length + " new longswords registered. " +
-                    "The existing Beast Slayer Longsword remains the Beast entry.");
+                Debug.Log(LogPrefix + "Creature-family " + weaponType + " registration complete: " +
+                    succeeded + "/" + specs.Length + " items registered.");
 
                 return succeeded == specs.Length;
             }
             catch (Exception ex)
             {
-                Debug.LogError(LogPrefix + "Creature-family longsword registration failed: " + ex);
+                Debug.LogError(LogPrefix + "Creature-family " + weaponType + " registration failed: " + ex);
                 return false;
             }
         }
 
-        private static bool RegisterCreatureFamilySlayerLongsword(
+        private static bool RegisterCreatureFamilySlayerWeapon(
             Database<ItemDefinition> itemDb,
             ItemDefinition baseSword,
             string itemId,
             string displayName,
-            string creatureFamily)
+            string creatureFamily,
+            string weaponType)
         {
             try
             {
@@ -475,7 +676,7 @@ namespace SolastaExpandedEquipmentMod
                         GuiPresentation existingGui = new GuiPresentation(existing.GuiPresentation);
                         existingGui.Title = displayName;
                         existingGui.Description =
-                            "A magical longsword that grants +1 to attack and damage, " +
+                            "A magical " + weaponType + " that grants +1 to attack and damage, " +
                             "with an additional +1 to attack and damage against " + creatureFamily +
                             " (for +2 total attack and damage against that family).";
                         SetField(existing, "guiPresentation", existingGui);
@@ -499,7 +700,7 @@ namespace SolastaExpandedEquipmentMod
                 GuiPresentation presentation = new GuiPresentation(baseSword.GuiPresentation);
                 presentation.Title = displayName;
                 presentation.Description =
-                    "A magical longsword that grants +1 to attack and damage, " +
+                    "A magical " + weaponType + " that grants +1 to attack and damage, " +
                     "with an additional +1 to attack and damage against " + creatureFamily +
                     " (for +2 total attack and damage against that family).";
 
@@ -1404,6 +1605,7 @@ namespace SolastaExpandedEquipmentMod
                 foreach (string[] spec in specs)
                 {
                     if (RegisterMagicalLongsword(itemDb, spellDb, baseSword,
+                        "longsword",
                         spec[0], spec[1], spec[2], spec[3], spec[4],
                         proneCondition, baneCondition, weakeningCondition))
                         succeeded++;
@@ -1420,10 +1622,207 @@ namespace SolastaExpandedEquipmentMod
             }
         }
 
+        public static bool RegisterAdvancedLongswords()
+        {
+            return AdvancedLongswordFactory.Register();
+        }
+
+        public static bool RegisterAdvancedShortswords()
+        {
+            return AdvancedLongswordFactory.RegisterShortswords();
+        }
+
+        public static bool RegisterMagicalDaggers()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = itemDb.GetElement("Dagger", true);
+            if (prone == null || bane == null || weakening == null ||
+                template == null || template.GuiPresentation == null)
+            {
+                Debug.LogError(LogPrefix + "Magical dagger registration failed: required template or conditions unavailable.");
+                return false;
+            }
+
+            string[][] specs =
+            {
+                new[] { "DaggerPlus1OfBlindness", "Dagger +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { "DaggerPlus1OfAcid", "Dagger +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { "DaggerPlus1OfFire", "Dagger +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { "DaggerPlus1OfLightning", "Dagger +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { "DaggerPlus1OfCold", "Dagger +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { "DaggerPlus1OfPoison", "Dagger +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { "DaggerPlus1OfWilting", "Dagger +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { "DaggerPlus1OfLight", "Dagger +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { "DaggerPlus1OfBoomin", "Dagger +1 of Boomin", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { "DaggerPlus1OfBane", "Dagger +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { "DaggerPlus1OfCurses", "Dagger +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                new[] { "DaggerPlus1OfWeakening", "Dagger +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                new[] { "DaggerPlus1OfPower", "Dagger +1 of Power", "Grease", "Prone", "Prone" }
+            };
+
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+            {
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, "dagger",
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+            }
+
+            Debug.Log(LogPrefix + "Magical dagger registration complete: " + succeeded + "/" + specs.Length + ".");
+            return succeeded == specs.Length;
+        }
+
+        public static bool RegisterQuicknessDagger()
+        {
+            const string itemId = "DaggerPlus2OfQuickness";
+            const string displayName = "Dagger +2 of Quickness";
+
+            try
+            {
+                Database<ItemDefinition> itemDb =
+                    DatabaseRepository.GetDatabase<ItemDefinition>();
+                if (itemDb == null)
+                {
+                    Debug.LogError(LogPrefix + "Item database unavailable for " + displayName + ".");
+                    return false;
+                }
+
+                ItemDefinition existing = itemDb.GetElement(itemId, true);
+                if (existing != null)
+                {
+                    Debug.Log(LogPrefix + displayName + " already exists; kept existing definition.");
+                    return true;
+                }
+
+                ItemDefinition baseDagger = itemDb.GetElement("Dagger", true);
+                if (baseDagger == null || baseDagger.GuiPresentation == null)
+                {
+                    Debug.LogError(LogPrefix + "Vanilla Dagger template unavailable for " + displayName + ".");
+                    return false;
+                }
+
+                ItemDefinition dagger = UnityEngine.Object.Instantiate(baseDagger);
+                if (dagger == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not clone the vanilla Dagger for " + displayName + ".");
+                    return false;
+                }
+
+                dagger.ForceName(itemId);
+                dagger.SetUserContentGUID(Guid.NewGuid().ToString());
+                dagger.IsUserContent = true;
+
+                GuiPresentation presentation = new GuiPresentation(baseDagger.GuiPresentation);
+                presentation.Title = displayName;
+                presentation.Description =
+                    "A magical dagger that grants +2 to attack and damage. While equipped, it grants one additional weapon attack as part of the Attack action.";
+
+                if (!SetField(dagger, "guiPresentation", presentation) ||
+                    !SetField(dagger, "magical", true))
+                {
+                    Debug.LogError(LogPrefix + "Could not configure the presentation or magical flag for " + displayName + ".");
+                    return false;
+                }
+
+                FeatureDefinitionAttackModifier modifier =
+                    CreateAttackModifier(itemId, displayName, 2, baseDagger.GuiPresentation);
+                if (modifier == null)
+                    return false;
+
+                List<ItemPropertyDescription> properties = dagger.StaticProperties;
+                if (properties == null)
+                {
+                    properties = new List<ItemPropertyDescription>();
+                    if (!SetField(dagger, "staticProperties", properties))
+                    {
+                        Debug.LogError(LogPrefix + "Could not initialize item properties for " + displayName + ".");
+                        return false;
+                    }
+                }
+
+                ItemPropertyDescription property =
+                    CreateFeatureProperty(itemDb, baseDagger, modifier);
+                if (property == null)
+                {
+                    Debug.LogError(LogPrefix + "Could not create the attack/damage property for " + displayName + ".");
+                    return false;
+                }
+
+                properties.Add(property);
+                itemDb.Add(dagger);
+
+                if (itemDb.GetElement(itemId, true) == null)
+                {
+                    Debug.LogError(LogPrefix + "Registration verification failed for " + displayName + ".");
+                    return false;
+                }
+
+                Debug.Log(LogPrefix + "Registered " + displayName + " with +2 attack/damage and the SEE Nick-style attack hook.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(LogPrefix + "Registration failed for " + displayName + ": " + ex);
+                return false;
+            }
+        }
+
+        public static bool RegisterMagicalShortswords()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = itemDb.GetElement("Shortsword", true);
+            if (prone == null || bane == null || weakening == null ||
+                template == null || template.GuiPresentation == null)
+                return false;
+
+            string[][] specs =
+            {
+                new[] { "ShortswordPlus1OfBlindness", "Shortsword +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { "ShortswordPlus1OfAcid", "Shortsword +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { "ShortswordPlus1OfFire", "Shortsword +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { "ShortswordPlus1OfLightning", "Shortsword +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { "ShortswordPlus1OfCold", "Shortsword +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { "ShortswordPlus1OfPoison", "Shortsword +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { "ShortswordPlus1OfWilting", "Shortsword +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { "ShortswordPlus1OfLight", "Shortsword +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { "ShortswordPlus1OfBooming", "Shortsword +1 of Booming", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { "ShortswordPlus1OfBane", "Shortsword +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { "ShortswordPlus1OfCurses", "Shortsword +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                new[] { "ShortswordPlus1OfWeakening", "Shortsword +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                new[] { "ShortswordPlus1OfPower", "Shortsword +1 of Power", "Grease", "Prone", "Prone" }
+            };
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, "shortsword",
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+            Debug.Log(LogPrefix + "Magical shortsword registration complete: " + succeeded + "/" + specs.Length + ".");
+            return succeeded == specs.Length;
+        }
+
         private static bool RegisterMagicalLongsword(
             Database<ItemDefinition> itemDb,
             Database<SpellDefinition> spellDb,
             ItemDefinition baseSword,
+            string weaponType,
             string itemId,
             string displayName,
             string spellId,
@@ -1465,7 +1864,7 @@ namespace SolastaExpandedEquipmentMod
 
                 GuiPresentation presentation = new GuiPresentation(baseSword.GuiPresentation);
                 presentation.Title = displayName;
-                presentation.Description = "A magical +1 longsword. " + GetMagicalLongswordDescription(effectMode, effectKey) +
+                presentation.Description = "A magical +1 " + weaponType + ". " + GetMagicalLongswordDescription(effectMode, effectKey) +
                     " Its magical effect triggers when the weapon hits a target.";
                 if (!SetField(sword, "guiPresentation", presentation) || !SetField(sword, "magical", true))
                 {
@@ -1501,7 +1900,11 @@ namespace SolastaExpandedEquipmentMod
                     return false;
                 }
 
-                weaponForms.Clear();
+                // Elemental variants keep the base Longsword hit forms (normal slashing
+                // weapon damage) and append one 1d6 elemental rider. Status variants
+                // replace the template forms with their intended on-hit effect.
+                if (effectMode != "Damage")
+                    weaponForms.Clear();
                 if (!BuildMagicalLongswordForms(sourceSpell, weaponEffect, weaponForms,
                     effectMode, effectKey, displayName,
                     proneCondition, baneCondition, weakeningCondition))
@@ -1522,9 +1925,15 @@ namespace SolastaExpandedEquipmentMod
 
         private static string GetMagicalLongswordDescription(string mode, string key)
         {
-            if (mode == "Damage") return "+1d6 " + key.Replace("Damage", "").ToLowerInvariant() + " damage.";
+            if (mode == "Damage")
+            {
+                string damageType = key == "DamageThunder"
+                    ? "sonic"
+                    : key.Replace("Damage", "").ToLowerInvariant();
+                return "+1d6 " + damageType + " damage.";
+            }
             if (mode == "RandomCurse") return "On a hit, randomly applies one effect from the Bestow Curse spell.";
-            if (mode == "Weakening") return "On a hit, the target must make a Strength saving throw (DC 11) or become Enfeebled.";
+            if (mode == "Weakening") return "On a hit, the target must succeed on a DC 11 Strength saving throw or become Weakened, taking a -2 penalty to Strength saving throws.";
             if (mode == "Prone") return "On a hit, the target must fail a DC 11 Constitution saving throw or fall Prone.";
             if (key == "Blindness") return "On a hit, may Blind the target.";
             if (key == "Bane") return "On a hit, applies the Banestruck effect.";
@@ -1857,7 +2266,7 @@ namespace SolastaExpandedEquipmentMod
             }
         }
 
-        private static EffectForm CreateMagicalLongswordConditionForm(ConditionDefinition condition, bool requiresSavingThrow)
+        internal static EffectForm CreateMagicalLongswordConditionForm(ConditionDefinition condition, bool requiresSavingThrow)
         {
             if (condition == null)
                 return null;
@@ -1920,7 +2329,7 @@ namespace SolastaExpandedEquipmentMod
             }
         }
 
-        private static FeatureDefinitionAttackModifier CreateAttackModifier(
+        internal static FeatureDefinitionAttackModifier CreateAttackModifier(
             string itemId,
             string displayName,
             int bonus,
@@ -2055,10 +2464,10 @@ namespace SolastaExpandedEquipmentMod
             return modifier;
         }
 
-        private static ItemPropertyDescription CreateFeatureProperty(
+        internal static ItemPropertyDescription CreateFeatureProperty(
             Database<ItemDefinition> itemDb,
             ItemDefinition baseItem,
-            FeatureDefinitionAttackModifier modifier)
+            FeatureDefinition feature)
         {
             ItemPropertyDescription template = null;
 
@@ -2121,7 +2530,7 @@ namespace SolastaExpandedEquipmentMod
                 ItemPropertyDescription.PropertyType.Feature);
 
             bool featureSet = SetField(
-                property, "featureDefinition", modifier);
+                property, "featureDefinition", feature);
 
             bool conditionSet = SetField(
                 property, "conditionDefinition", null);
@@ -2147,7 +2556,7 @@ namespace SolastaExpandedEquipmentMod
             return property;
         }
 
-        private static bool SetField(
+        internal static bool SetField(
             object target,
             string fieldName,
             object value)

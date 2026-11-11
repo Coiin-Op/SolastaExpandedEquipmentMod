@@ -92,10 +92,12 @@
     <Compile Include="Equipment\Rings\Rings.cs" />
     <Compile Include="Equipment\Weapons\AmmunitionEffectProxyPatch.cs" />
     <Compile Include="Equipment\Weapons\ChromaticOrbSpellFactory.cs" />
+    <Compile Include="Equipment\Weapons\QuicknessDaggerAttackPatch.cs" />
     <Compile Include="Equipment\Weapons\SpellDartItems.cs" />
     <Compile Include="Equipment\Weapons\StaffItems.cs" />
     <Compile Include="Equipment\Weapons\WandItems.cs" />
     <Compile Include="Equipment\Weapons\WeaponFactory.cs" />
+    <Compile Include="Equipment\Weapons\AdvancedLongswordFactory.cs" />
     <Compile Include="Equipment\Weapons\WeaponRegistration.cs" />
     <Compile Include="ItemDatabaseExporter.cs" />
     <Compile Include="Main.cs" />
