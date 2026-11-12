@@ -2,7 +2,7 @@
   "Id": "SolastaExpandedEquipmentMod",
   "DisplayName": "Solasta Expanded Equipment",
   "Author": "Scott",
-  "Version": "2.0.2",
+  "Version": "3.0.0",
   "ManagerVersion": "0.23.2a",
   "AssemblyName": "SolastaExpandedEquipmentMod.dll",
   "EntryMethod": "SolastaExpandedEquipmentMod.Main.Load"

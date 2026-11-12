@@ -13,8 +13,10 @@ namespace SolastaExpandedEquipmentMod
 
         private static bool itemDatabaseReadyLogged;
         private static bool spellDatabaseReadyLogged;
+        private static bool conditionDatabaseReadyLogged;
         private static bool waitingForDatabasesLogged;
 
+        private const float DatabaseStartupSettleDelaySeconds = 3f;
         private static float nextEquipmentRegistrationAttemptTime;
         private static float nextEquipmentRegistrationRetryLogTime;
 
@@ -94,6 +96,9 @@ namespace SolastaExpandedEquipmentMod
                 Database<SpellDefinition> spellDb =
                     DatabaseRepository.GetDatabase<SpellDefinition>();
 
+                Database<ConditionDefinition> conditionDb =
+                    DatabaseRepository.GetDatabase<ConditionDefinition>();
+
                 // Log database readiness only when its state changes.
                 if (itemDb != null && !itemDatabaseReadyLogged)
                 {
@@ -111,8 +116,22 @@ namespace SolastaExpandedEquipmentMod
                         "SpellDefinition database is READY");
                 }
 
-                // Wait until both databases exist.
-                if (itemDb == null || spellDb == null)
+                bool conditionDefinitionsReady = conditionDb != null &&
+                    conditionDb.GetElement("ConditionPetrified", true) != null &&
+                    conditionDb.GetElement("ConditionBanished", true) != null;
+
+                if (conditionDefinitionsReady && !conditionDatabaseReadyLogged)
+                {
+                    conditionDatabaseReadyLogged = true;
+                    nextEquipmentRegistrationAttemptTime =
+                        Time.realtimeSinceStartup + DatabaseStartupSettleDelaySeconds;
+                    StartupDiagnostic.Checkpoint(
+                        "ConditionDefinition database is POPULATED; delaying custom registration for " +
+                        DatabaseStartupSettleDelaySeconds + " seconds for database startup to settle");
+                }
+
+                // Wait until the definitions used by equipment registration are populated.
+                if (itemDb == null || spellDb == null || !conditionDefinitionsReady)
                 {
                     if (!waitingForDatabasesLogged)
                     {

@@ -405,6 +405,45 @@ namespace SolastaExpandedEquipmentMod
             return RegisterCreatureFamilySlayerWeapons("Shortsword", "shortsword");
         }
 
+        public static bool RegisterCreatureFamilySlayerScimitars()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Scimitar", "scimitar");
+        }
+
+        public static bool RegisterCreatureFamilySlayerRapiers()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Rapier", "rapier");
+        }
+
+        public static bool RegisterCreatureFamilySlayerGreatswords()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Greatsword", "greatsword");
+        }
+
+        public static bool RegisterCreatureFamilySlayerKatanas()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Katana", "katana");
+        }
+
+        public static bool RegisterCreatureFamilySlayerLongbows()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Longbow", "longbow");
+        }
+
+        public static bool RegisterCreatureFamilySlayerShortbows()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Shortbow", "shortbow");
+        }
+
+        public static bool RegisterCreatureFamilySlayerMaces()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Mace", "mace");
+        }
+
+        public static bool RegisterCreatureFamilySlayerWarhammers()
+        {
+            return RegisterCreatureFamilySlayerWeapons("Warhammer", "warhammer");
+        }
         public static bool RegisterCreatureFamilySlayerDaggers()
         {
             bool basicDaggersRegistered =
@@ -565,6 +604,115 @@ namespace SolastaExpandedEquipmentMod
             }
         }
 
+        public static bool RegisterAdditionalWeaponBatches()
+        {
+            string[][] batches =
+            {
+                new[] { "Greataxe", "greataxe", "Greataxe", "11", "true", "true" },
+                new[] { "Maul", "maul", "Maul", "13", "true", "true" },
+                new[] { "Battleaxe", "battleaxe", "Battleaxe", "11", "true", "true" },
+                new[] { "Handaxe", "handaxe", "Handaxe", "11", "true", "true" },
+                new[] { "Halberd", "halberd", "Halberd", "11", "true", "true" },
+                new[] { "Pike", "pike", "Pike", "11", "true", "true" },
+                new[] { "Long Mace", "longmace", "CELongMace", "11", "true", "true" },
+                new[] { "Morningstar", "morningstar", "Morningstar", "11", "true", "true" },
+                new[] { "Quarterstaff", "quarterstaff", "Quarterstaff", "11", "true", "true" },
+                new[] { "Javelin", "javelin", "Javelin", "11", "true", "true" },
+                new[] { "Spear", "spear", "Spear", "11", "true", "true" },
+                new[] { "Arrow", "arrow", "Arrow", "11", "false", "true" },
+                new[] { "Bolt", "bolt", "Bolt", "11", "false", "true" },
+                new[] { "Dart", "dart", "Dart", "11", "false", "false" }
+            };
+
+            bool success = true;
+            foreach (string[] batch in batches)
+            {
+                string title = batch[0];
+                string weaponType = batch[1];
+                string templateId = batch[2];
+                int demonicDc = int.Parse(batch[3]);
+                bool includeDemonicInfluence = bool.Parse(batch[4]);
+                bool includeWeakeningAndPower = bool.Parse(batch[5]);
+
+                bool family = RegisterGeneratedFamilySlayers(title, templateId, weaponType);
+                bool magical = RegisterMagicalBows(templateId, weaponType, includeWeakeningAndPower);
+                bool advanced = AdvancedLongswordFactory.RegisterGeneratedWeaponSet(
+                    title, weaponType, demonicDc, includeDemonicInfluence);
+                success &= family && magical && advanced;
+            }
+
+            return success;
+        }
+
+        private static bool RegisterGeneratedFamilySlayers(
+            string title, string templateId, string weaponType)
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            ItemDefinition template = ResolveWeaponTemplate(itemDb, templateId, weaponType);
+            if (itemDb == null || template == null || template.GuiPresentation == null)
+            {
+                Debug.LogError(LogPrefix + "No base template found for " + title + " batch (" + templateId + ").");
+                return false;
+            }
+
+            string idPrefix = NormalizeItemId(title);
+            string[][] targets =
+            {
+                new[] { "Giants", "Giants" }, new[] { "Aberrations", "Aberrations" },
+                new[] { "ArtificerConstructs", "Artificer Constructs" }, new[] { "Beasts", "Beasts" },
+                new[] { "Celestials", "Celestials" }, new[] { "Constructs", "Constructs" },
+                new[] { "Elementals", "Elementals" }, new[] { "Fey", "Fey" },
+                new[] { "Humanoids", "Humanoids" }, new[] { "Monstrosities", "Monstrosities" },
+                new[] { "Plants", "Plants" }, new[] { "Undead", "Undead" },
+                new[] { "SorrAkkath", "Sorr-Akkath" }, new[] { "Dragons", "Dragons" }
+            };
+
+            int succeeded = 0;
+            foreach (string[] target in targets)
+            {
+                if (RegisterCreatureFamilySlayerWeapon(itemDb, template,
+                    idPrefix + "Vs" + target[0] + "Plus1",
+                    title + " +1, +2 vs " + target[1], target[1], weaponType))
+                    succeeded++;
+            }
+
+            Debug.Log(LogPrefix + "Creature-family " + title + " registration complete: " +
+                succeeded + "/" + targets.Length + " items registered.");
+            return succeeded == targets.Length;
+        }
+
+        internal static ItemDefinition ResolveWeaponTemplate(
+            Database<ItemDefinition> itemDb, string requestedId, string weaponType)
+        {
+            if (itemDb == null)
+                return null;
+
+            string normalized = NormalizeItemId(requestedId);
+            string[] candidates =
+            {
+                requestedId, normalized, "CE" + normalized,
+                weaponType == "halberd" ? "CEHalberd" : null,
+                weaponType == "pike" ? "CEPike" : null,
+                weaponType == "longmace" ? "LongMace" : null,
+                weaponType == "longmace" ? "Long Mace" : null
+            };
+            foreach (string candidate in candidates)
+            {
+                if (string.IsNullOrEmpty(candidate)) continue;
+                ItemDefinition item = itemDb.GetElement(candidate, true);
+                if (item != null) return item;
+            }
+            return null;
+        }
+
+        internal static string NormalizeItemId(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            System.Text.StringBuilder result = new System.Text.StringBuilder(value.Length);
+            foreach (char c in value)
+                if (char.IsLetterOrDigit(c)) result.Append(c);
+            return result.ToString();
+        }
         private static bool RegisterCreatureFamilySlayerWeapons(string baseWeaponId, string weaponType)
         {
             try
@@ -578,14 +726,131 @@ namespace SolastaExpandedEquipmentMod
                     return false;
                 }
 
-                ItemDefinition baseSword = itemDb.GetElement(baseWeaponId, true);
+                ItemDefinition baseSword = ResolveWeaponTemplate(itemDb, baseWeaponId, weaponType);
+                if (baseSword == null && weaponType == "katana")
+                {
+                    baseSword = itemDb.GetElement("Longsword", true);
+                    Debug.LogWarning(LogPrefix + "Katana template not found; using Longsword as the Katana base template.");
+                }
                 if (baseSword == null || baseSword.GuiPresentation == null)
                 {
                     Debug.LogError(LogPrefix + "Vanilla " + weaponType + " template unavailable or incomplete.");
                     return false;
                 }
 
-                string[][] specs = weaponType == "dagger" ? new string[][]
+                string[][] specs = weaponType == "warhammer" ? new string[][]
+                {
+                    new[] { "WarhammerVsGiantsPlus1", "Warhammer +1, +2 vs Giants", "Giants" },
+                    new[] { "WarhammerVsAberrationsPlus1", "Warhammer +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "WarhammerVsArtificerConstructsPlus1", "Warhammer +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "WarhammerVsBeastsPlus1", "Warhammer +1, +2 vs Beasts", "Beasts" },
+                    new[] { "WarhammerVsCelestialsPlus1", "Warhammer +1, +2 vs Celestials", "Celestials" },
+                    new[] { "WarhammerVsConstructsPlus1", "Warhammer +1, +2 vs Constructs", "Constructs" },
+                    new[] { "WarhammerVsElementalsPlus1", "Warhammer +1, +2 vs Elementals", "Elementals" },
+                    new[] { "WarhammerVsFeyPlus1", "Warhammer +1, +2 vs Fey", "Fey" },
+                    new[] { "WarhammerVsHumanoidsPlus1", "Warhammer +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "WarhammerVsMonstrositiesPlus1", "Warhammer +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "WarhammerVsPlantsPlus1", "Warhammer +1, +2 vs Plants", "Plants" },
+                    new[] { "WarhammerVsUndeadPlus1", "Warhammer +1, +2 vs Undead", "Undead" },
+                    new[] { "WarhammerVsSorrAkkathPlus1", "Warhammer +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "WarhammerVsDragonsPlus1", "Warhammer +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "mace" ? new string[][]
+                {
+                    new[] { "MaceVsGiantsPlus1", "Mace +1, +2 vs Giants", "Giants" },
+                    new[] { "MaceVsAberrationsPlus1", "Mace +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "MaceVsArtificerConstructsPlus1", "Mace +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "MaceVsBeastsPlus1", "Mace +1, +2 vs Beasts", "Beasts" },
+                    new[] { "MaceVsCelestialsPlus1", "Mace +1, +2 vs Celestials", "Celestials" },
+                    new[] { "MaceVsConstructsPlus1", "Mace +1, +2 vs Constructs", "Constructs" },
+                    new[] { "MaceVsElementalsPlus1", "Mace +1, +2 vs Elementals", "Elementals" },
+                    new[] { "MaceVsFeyPlus1", "Mace +1, +2 vs Fey", "Fey" },
+                    new[] { "MaceVsHumanoidsPlus1", "Mace +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "MaceVsMonstrositiesPlus1", "Mace +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "MaceVsPlantsPlus1", "Mace +1, +2 vs Plants", "Plants" },
+                    new[] { "MaceVsUndeadPlus1", "Mace +1, +2 vs Undead", "Undead" },
+                    new[] { "MaceVsSorrAkkathPlus1", "Mace +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "MaceVsDragonsPlus1", "Mace +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "longbow" ? new string[][]
+                {
+                    new[] { "LongbowVsGiantsPlus1", "Longbow +1, +2 vs Giants", "Giants" },
+                    new[] { "LongbowVsAberrationsPlus1", "Longbow +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "LongbowVsArtificerConstructsPlus1", "Longbow +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "LongbowVsBeastsPlus1", "Longbow +1, +2 vs Beasts", "Beasts" },
+                    new[] { "LongbowVsCelestialsPlus1", "Longbow +1, +2 vs Celestials", "Celestials" },
+                    new[] { "LongbowVsConstructsPlus1", "Longbow +1, +2 vs Constructs", "Constructs" },
+                    new[] { "LongbowVsElementalsPlus1", "Longbow +1, +2 vs Elementals", "Elementals" },
+                    new[] { "LongbowVsFeyPlus1", "Longbow +1, +2 vs Fey", "Fey" },
+                    new[] { "LongbowVsHumanoidsPlus1", "Longbow +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "LongbowVsMonstrositiesPlus1", "Longbow +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "LongbowVsPlantsPlus1", "Longbow +1, +2 vs Plants", "Plants" },
+                    new[] { "LongbowVsUndeadPlus1", "Longbow +1, +2 vs Undead", "Undead" },
+                    new[] { "LongbowVsSorrAkkathPlus1", "Longbow +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "LongbowVsDragonsPlus1", "Longbow +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "shortbow" ? new string[][]
+                {
+                    new[] { "ShortbowVsGiantsPlus1", "Shortbow +1, +2 vs Giants", "Giants" },
+                    new[] { "ShortbowVsAberrationsPlus1", "Shortbow +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "ShortbowVsArtificerConstructsPlus1", "Shortbow +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "ShortbowVsBeastsPlus1", "Shortbow +1, +2 vs Beasts", "Beasts" },
+                    new[] { "ShortbowVsCelestialsPlus1", "Shortbow +1, +2 vs Celestials", "Celestials" },
+                    new[] { "ShortbowVsConstructsPlus1", "Shortbow +1, +2 vs Constructs", "Constructs" },
+                    new[] { "ShortbowVsElementalsPlus1", "Shortbow +1, +2 vs Elementals", "Elementals" },
+                    new[] { "ShortbowVsFeyPlus1", "Shortbow +1, +2 vs Fey", "Fey" },
+                    new[] { "ShortbowVsHumanoidsPlus1", "Shortbow +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "ShortbowVsMonstrositiesPlus1", "Shortbow +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "ShortbowVsPlantsPlus1", "Shortbow +1, +2 vs Plants", "Plants" },
+                    new[] { "ShortbowVsUndeadPlus1", "Shortbow +1, +2 vs Undead", "Undead" },
+                    new[] { "ShortbowVsSorrAkkathPlus1", "Shortbow +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "ShortbowVsDragonsPlus1", "Shortbow +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "katana" ? new string[][]
+                {
+                    new[] { "KatanaVsGiantsPlus1", "Katana +1, +2 vs Giants", "Giants" },
+                    new[] { "KatanaVsAberrationsPlus1", "Katana +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "KatanaVsArtificerConstructsPlus1", "Katana +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "KatanaVsBeastsPlus1", "Katana +1, +2 vs Beasts", "Beasts" },
+                    new[] { "KatanaVsCelestialsPlus1", "Katana +1, +2 vs Celestials", "Celestials" },
+                    new[] { "KatanaVsConstructsPlus1", "Katana +1, +2 vs Constructs", "Constructs" },
+                    new[] { "KatanaVsElementalsPlus1", "Katana +1, +2 vs Elementals", "Elementals" },
+                    new[] { "KatanaVsFeyPlus1", "Katana +1, +2 vs Fey", "Fey" },
+                    new[] { "KatanaVsHumanoidsPlus1", "Katana +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "KatanaVsMonstrositiesPlus1", "Katana +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "KatanaVsPlantsPlus1", "Katana +1, +2 vs Plants", "Plants" },
+                    new[] { "KatanaVsUndeadPlus1", "Katana +1, +2 vs Undead", "Undead" },
+                    new[] { "KatanaVsSorrAkkathPlus1", "Katana +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "KatanaVsDragonsPlus1", "Katana +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "greatsword" ? new string[][]
+                {
+                    new[] { "GreatswordVsGiantsPlus1", "Greatsword +1, +2 vs Giants", "Giants" },
+                    new[] { "GreatswordVsAberrationsPlus1", "Greatsword +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "GreatswordVsArtificerConstructsPlus1", "Greatsword +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "GreatswordVsBeastsPlus1", "Greatsword +1, +2 vs Beasts", "Beasts" },
+                    new[] { "GreatswordVsCelestialsPlus1", "Greatsword +1, +2 vs Celestials", "Celestials" },
+                    new[] { "GreatswordVsConstructsPlus1", "Greatsword +1, +2 vs Constructs", "Constructs" },
+                    new[] { "GreatswordVsElementalsPlus1", "Greatsword +1, +2 vs Elementals", "Elementals" },
+                    new[] { "GreatswordVsFeyPlus1", "Greatsword +1, +2 vs Fey", "Fey" },
+                    new[] { "GreatswordVsHumanoidsPlus1", "Greatsword +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "GreatswordVsMonstrositiesPlus1", "Greatsword +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "GreatswordVsPlantsPlus1", "Greatsword +1, +2 vs Plants", "Plants" },
+                    new[] { "GreatswordVsUndeadPlus1", "Greatsword +1, +2 vs Undead", "Undead" },
+                    new[] { "GreatswordVsSorrAkkathPlus1", "Greatsword +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "GreatswordVsDragonsPlus1", "Greatsword +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "rapier" ? new string[][]
+                {
+                    new[] { "RapierVsGiantsPlus1", "Rapier +1, +2 vs Giants", "Giants" },
+                    new[] { "RapierVsAberrationsPlus1", "Rapier +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "RapierVsArtificerConstructsPlus1", "Rapier +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "RapierVsBeastsPlus1", "Rapier +1, +2 vs Beasts", "Beasts" },
+                    new[] { "RapierVsCelestialsPlus1", "Rapier +1, +2 vs Celestials", "Celestials" },
+                    new[] { "RapierVsConstructsPlus1", "Rapier +1, +2 vs Constructs", "Constructs" },
+                    new[] { "RapierVsElementalsPlus1", "Rapier +1, +2 vs Elementals", "Elementals" },
+                    new[] { "RapierVsFeyPlus1", "Rapier +1, +2 vs Fey", "Fey" },
+                    new[] { "RapierVsHumanoidsPlus1", "Rapier +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "RapierVsMonstrositiesPlus1", "Rapier +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "RapierVsPlantsPlus1", "Rapier +1, +2 vs Plants", "Plants" },
+                    new[] { "RapierVsUndeadPlus1", "Rapier +1, +2 vs Undead", "Undead" },
+                    new[] { "RapierVsSorrAkkathPlus1", "Rapier +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "RapierVsDragonsPlus1", "Rapier +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "dagger" ? new string[][]
                 {
                     new[] { "DaggerVsGiantsPlus1", "Dagger +1, +2 vs Giants", "Giants" },
                     new[] { "DaggerVsAberrationsPlus1", "Dagger +1, +2 vs Aberrations", "Aberrations" },
@@ -617,6 +882,22 @@ namespace SolastaExpandedEquipmentMod
                     new[] { "ShortswordVsUndeadPlus1", "Shortsword +1, +2 vs Undead", "Undead" },
                     new[] { "ShortswordVsSorrAkkathPlus1", "Shortsword +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
                     new[] { "ShortswordVsDragonsPlus1", "Shortsword +1, +2 vs Dragons", "Dragons" }
+                } : weaponType == "scimitar" ? new string[][]
+                {
+                    new[] { "ScimitarVsGiantsPlus1", "Scimitar +1, +2 vs Giants", "Giants" },
+                    new[] { "ScimitarVsAberrationsPlus1", "Scimitar +1, +2 vs Aberrations", "Aberrations" },
+                    new[] { "ScimitarVsArtificerConstructsPlus1", "Scimitar +1, +2 vs Artificer Constructs", "Artificer Constructs" },
+                    new[] { "ScimitarVsBeastsPlus1", "Scimitar +1, +2 vs Beasts", "Beasts" },
+                    new[] { "ScimitarVsCelestialsPlus1", "Scimitar +1, +2 vs Celestials", "Celestials" },
+                    new[] { "ScimitarVsConstructsPlus1", "Scimitar +1, +2 vs Constructs", "Constructs" },
+                    new[] { "ScimitarVsElementalsPlus1", "Scimitar +1, +2 vs Elementals", "Elementals" },
+                    new[] { "ScimitarVsFeyPlus1", "Scimitar +1, +2 vs Fey", "Fey" },
+                    new[] { "ScimitarVsHumanoidsPlus1", "Scimitar +1, +2 vs Humanoids", "Humanoids" },
+                    new[] { "ScimitarVsMonstrositiesPlus1", "Scimitar +1, +2 vs Monstrosities", "Monstrosities" },
+                    new[] { "ScimitarVsPlantsPlus1", "Scimitar +1, +2 vs Plants", "Plants" },
+                    new[] { "ScimitarVsUndeadPlus1", "Scimitar +1, +2 vs Undead", "Undead" },
+                    new[] { "ScimitarVsSorrAkkathPlus1", "Scimitar +1, +2 vs Sorr-Akkath", "Sorr-Akkath" },
+                    new[] { "ScimitarVsDragonsPlus1", "Scimitar +1, +2 vs Dragons", "Dragons" }
                 } : new string[][]
                 {
                     new[] { "LongswordVsGiantsPlus1", "Longsword +1, +2 vs Giants", "Giants" },
@@ -1632,6 +1913,45 @@ namespace SolastaExpandedEquipmentMod
             return AdvancedLongswordFactory.RegisterShortswords();
         }
 
+        public static bool RegisterAdvancedScimitars()
+        {
+            return AdvancedLongswordFactory.RegisterScimitars();
+        }
+
+        public static bool RegisterAdvancedRapiers()
+        {
+            return AdvancedLongswordFactory.RegisterRapiers();
+        }
+
+        public static bool RegisterAdvancedGreatswords()
+        {
+            return AdvancedLongswordFactory.RegisterGreatswords();
+        }
+
+        public static bool RegisterAdvancedKatanas()
+        {
+            return AdvancedLongswordFactory.RegisterKatanas();
+        }
+
+        public static bool RegisterAdvancedLongbows()
+        {
+            return AdvancedLongswordFactory.RegisterLongbows();
+        }
+
+        public static bool RegisterAdvancedShortbows()
+        {
+            return AdvancedLongswordFactory.RegisterShortbows();
+        }
+
+        public static bool RegisterAdvancedWarhammers()
+        {
+            return AdvancedLongswordFactory.RegisterWarhammers();
+        }
+        public static bool RegisterAdvancedMaces()
+        {
+            return AdvancedLongswordFactory.RegisterMaces();
+        }
+
         public static bool RegisterMagicalDaggers()
         {
             Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
@@ -1816,6 +2136,250 @@ namespace SolastaExpandedEquipmentMod
                     succeeded++;
             Debug.Log(LogPrefix + "Magical shortsword registration complete: " + succeeded + "/" + specs.Length + ".");
             return succeeded == specs.Length;
+        }
+
+        public static bool RegisterMagicalScimitars()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = itemDb.GetElement("Scimitar", true);
+            if (prone == null || bane == null || weakening == null ||
+                template == null || template.GuiPresentation == null)
+                return false;
+
+            string[][] specs =
+            {
+                new[] { "ScimitarPlus1OfBlindness", "Scimitar +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { "ScimitarPlus1OfAcid", "Scimitar +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { "ScimitarPlus1OfFire", "Scimitar +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { "ScimitarPlus1OfLightning", "Scimitar +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { "ScimitarPlus1OfCold", "Scimitar +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { "ScimitarPlus1OfPoison", "Scimitar +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { "ScimitarPlus1OfWilting", "Scimitar +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { "ScimitarPlus1OfLight", "Scimitar +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { "ScimitarPlus1OfBoomin", "Scimitar +1 of Boomin", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { "ScimitarPlus1OfBane", "Scimitar +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { "ScimitarPlus1OfCurses", "Scimitar +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                new[] { "ScimitarPlus1OfWeakening", "Scimitar +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                new[] { "ScimitarPlus1OfPower", "Scimitar +1 of Power", "Grease", "Prone", "Prone" }
+            };
+
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, "scimitar",
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+
+            Debug.Log(LogPrefix + "Magical scimitar registration complete: " + succeeded + "/" + specs.Length + ".");
+            return succeeded == specs.Length;
+        }
+
+        public static bool RegisterMagicalRapiers()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = itemDb.GetElement("Rapier", true);
+            if (prone == null || bane == null || weakening == null ||
+                template == null || template.GuiPresentation == null)
+                return false;
+
+            string[][] specs =
+            {
+                new[] { "RapierPlus1OfBlindness", "Rapier +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { "RapierPlus1OfAcid", "Rapier +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { "RapierPlus1OfFire", "Rapier +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { "RapierPlus1OfLightning", "Rapier +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { "RapierPlus1OfCold", "Rapier +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { "RapierPlus1OfPoison", "Rapier +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { "RapierPlus1OfWilting", "Rapier +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { "RapierPlus1OfLight", "Rapier +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { "RapierPlus1OfBoomin", "Rapier +1 of Boomin", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { "RapierPlus1OfBane", "Rapier +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { "RapierPlus1OfCurses", "Rapier +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                new[] { "RapierPlus1OfWeakening", "Rapier +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                new[] { "RapierPlus1OfPower", "Rapier +1 of Power", "Grease", "Prone", "Prone" }
+            };
+
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, "rapier",
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+            Debug.Log(LogPrefix + "Magical rapier registration complete: " + succeeded + "/" + specs.Length + ".");
+            return succeeded == specs.Length;
+        }
+
+        public static bool RegisterMagicalGreatswords()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = itemDb.GetElement("Greatsword", true);
+            if (prone == null || bane == null || weakening == null ||
+                template == null || template.GuiPresentation == null)
+                return false;
+
+            string[][] specs =
+            {
+                new[] { "GreatswordPlus1OfBlindness", "Greatsword +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { "GreatswordPlus1OfAcid", "Greatsword +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { "GreatswordPlus1OfFire", "Greatsword +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { "GreatswordPlus1OfLightning", "Greatsword +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { "GreatswordPlus1OfCold", "Greatsword +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { "GreatswordPlus1OfPoison", "Greatsword +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { "GreatswordPlus1OfWilting", "Greatsword +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { "GreatswordPlus1OfLight", "Greatsword +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { "GreatswordPlus1OfBoomin", "Greatsword +1 of Boomin", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { "GreatswordPlus1OfBane", "Greatsword +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { "GreatswordPlus1OfCurses", "Greatsword +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                new[] { "GreatswordPlus1OfWeakening", "Greatsword +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                new[] { "GreatswordPlus1OfPower", "Greatsword +1 of Power", "Grease", "Prone", "Prone" }
+            };
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, "greatsword",
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+            Debug.Log(LogPrefix + "Magical greatsword registration complete: " + succeeded + "/" + specs.Length + ".");
+            return succeeded == specs.Length;
+        }
+
+        public static bool RegisterMagicalKatanas()
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = itemDb.GetElement("Katana", true);
+            if (template == null)
+            {
+                template = itemDb.GetElement("Longsword", true);
+                Debug.LogWarning(LogPrefix + "Katana template not found; using Longsword as the Katana base template.");
+            }
+            if (prone == null || bane == null || weakening == null ||
+                template == null || template.GuiPresentation == null)
+                return false;
+
+            string[][] specs =
+            {
+                new[] { "KatanaPlus1OfBlindness", "Katana +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { "KatanaPlus1OfAcid", "Katana +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { "KatanaPlus1OfFire", "Katana +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { "KatanaPlus1OfLightning", "Katana +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { "KatanaPlus1OfCold", "Katana +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { "KatanaPlus1OfPoison", "Katana +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { "KatanaPlus1OfWilting", "Katana +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { "KatanaPlus1OfLight", "Katana +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { "KatanaPlus1OfBoomin", "Katana +1 of Boomin", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { "KatanaPlus1OfBane", "Katana +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { "KatanaPlus1OfCurses", "Katana +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" },
+                new[] { "KatanaPlus1OfWeakening", "Katana +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" },
+                new[] { "KatanaPlus1OfPower", "Katana +1 of Power", "Grease", "Prone", "Prone" }
+            };
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, "katana",
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+            Debug.Log(LogPrefix + "Magical katana registration complete: " + succeeded + "/" + specs.Length + ".");
+            return succeeded == specs.Length;
+        }
+
+        public static bool RegisterMagicalLongbows()
+        {
+            return RegisterMagicalBows("Longbow", "longbow");
+        }
+
+        public static bool RegisterMagicalShortbows()
+        {
+            return RegisterMagicalBows("Shortbow", "shortbow");
+        }
+
+        public static bool RegisterMagicalWarhammers()
+        {
+            return RegisterMagicalBows("Warhammer", "warhammer");
+        }
+        public static bool RegisterMagicalMaces()
+        {
+            return RegisterMagicalBows("Mace", "mace");
+        }
+
+        private static bool RegisterMagicalBows(string baseWeaponId, string weaponType, bool includeWeakeningAndPower = true)
+        {
+            Database<ItemDefinition> itemDb = DatabaseRepository.GetDatabase<ItemDefinition>();
+            Database<SpellDefinition> spellDb = DatabaseRepository.GetDatabase<SpellDefinition>();
+            Database<ConditionDefinition> conditionDb = DatabaseRepository.GetDatabase<ConditionDefinition>();
+            if (itemDb == null || spellDb == null || conditionDb == null ||
+                !InitializeMagicalLongswordWeakeningPatch())
+                return false;
+
+            ConditionDefinition prone = conditionDb.GetElement("ConditionProne", true);
+            ConditionDefinition bane = conditionDb.GetElement("ConditionBaned", true);
+            ConditionDefinition weakening = GetOrCreateMagicalLongswordWeakeningCondition(conditionDb);
+            ItemDefinition template = ResolveWeaponTemplate(itemDb, baseWeaponId, weaponType);
+            if (prone == null || bane == null || weakening == null || template == null ||
+                template.GuiPresentation == null)
+                return false;
+
+            string title = baseWeaponId == "CELongMace" ? "Long Mace" : baseWeaponId;
+            string idPrefix = NormalizeItemId(title);
+            List<string[]> specs = new List<string[]>
+            {
+                new[] { idPrefix + "Plus1OfBlindness", title + " +1 of Blindness", "Blindness", "Blindness", "Status" },
+                new[] { idPrefix + "Plus1OfAcid", title + " +1 of Acid", "AcidSplash", "DamageAcid", "Damage" },
+                new[] { idPrefix + "Plus1OfFire", title + " +1 of Fire", "FireBolt", "DamageFire", "Damage" },
+                new[] { idPrefix + "Plus1OfLightning", title + " +1 of Lightning", "ShockingGrasp", "DamageLightning", "Damage" },
+                new[] { idPrefix + "Plus1OfCold", title + " +1 of Cold", "RayOfFrost", "DamageCold", "Damage" },
+                new[] { idPrefix + "Plus1OfPoison", title + " +1 of Poison", "PoisonSpray", "DamagePoison", "Damage" },
+                new[] { idPrefix + "Plus1OfWilting", title + " +1 of Wilting", "ChillTouch", "DamageNecrotic", "Damage" },
+                new[] { idPrefix + "Plus1OfLight", title + " +1 of Light", "SacredFlame", "DamageRadiant", "Damage" },
+                new[] { idPrefix + "Plus1OfBoomin", title + " +1 of Boomin", "Thunderwave", "DamageThunder", "Damage" },
+                new[] { idPrefix + "Plus1OfBane", title + " +1 of Bane", "Bane", "Bane", "Bane" },
+                new[] { idPrefix + "Plus1OfCurses", title + " +1 of Curses", "BestowCurse", "Bestow Curse", "RandomCurse" }
+            };
+            if (includeWeakeningAndPower)
+            {
+                specs.Add(new[] { idPrefix + "Plus1OfWeakening", title + " +1 of Weakening", "RayOfEnfeeblement", "Weakening", "Weakening" });
+                specs.Add(new[] { idPrefix + "Plus1OfPower", title + " +1 of Power", "Grease", "Prone", "Prone" });
+            }
+
+            int succeeded = 0;
+            foreach (string[] spec in specs)
+                if (RegisterMagicalLongsword(itemDb, spellDb, template, weaponType,
+                    spec[0], spec[1], spec[2], spec[3], spec[4], prone, bane, weakening))
+                    succeeded++;
+            Debug.Log(LogPrefix + "Magical " + title + " registration complete: " +
+                succeeded + "/" + specs.Count + ".");
+            return succeeded == specs.Count;
         }
 
         private static bool RegisterMagicalLongsword(

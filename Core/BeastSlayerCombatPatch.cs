@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -622,40 +622,6 @@ namespace SolastaExpandedEquipmentMod
             if (WeaponNameIs(weaponName, "ShortswordVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
             if (WeaponNameIs(weaponName, "ShortswordVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
 
-            // Dagger +1 weapons gain an additional +1 attack and +1 damage against
-            // their designated creature family, for +2/+2 total against that family.
-            if (WeaponNameIs(weaponName, "DaggerVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
-
-            // Dagger +2 slayers gain +1 attack and damage against their target.
-            // The combined Giants/Fey dagger grants +1 vs Giants and +2 vs Fey.
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsGoblinoidsPlus3")) return MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsGiantsPlus3FeyPlus4"))
-            {
-                if (FamilyIs(defenderFamily, "Fey")) return 2;
-                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
-            }
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
-            if (WeaponNameIs(weaponName, "DaggerPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
-
             if (WeaponNameIs(weaponName, "ShortswordPlus2VsGoblinoidsPlus3")) return MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
             if (WeaponNameIs(weaponName, "ShortswordPlus2VsGiantsPlus3FeyPlus4"))
             {
@@ -671,7 +637,294 @@ namespace SolastaExpandedEquipmentMod
             if (WeaponNameIs(weaponName, "ShortswordPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
             if (WeaponNameIs(weaponName, "ShortswordPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
 
+            // Scimitar creature-family slayers: +1 conditional bonus on top of the
+            // item's universal +1 attack/damage modifier.
+            if (WeaponNameIs(weaponName, "ScimitarVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+
+            // Advanced scimitars add +1 against the named family; the Giants/Fey
+            // version adds +2 against Fey. Dragon Slayer is +3 against Dragons only.
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ScimitarPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "RapierVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsGoblinoidsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "RapierPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "RapierPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "GreatswordVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "GreatswordPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "KatanaVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsHumansPlus3")) return MatchesTarget(defender, defenderFamily, "Human") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "KatanaPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "LongbowVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "LongbowPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "ShortbowVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsGiantsPlus3FeyPlus4"))
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "ShortbowPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+
+            if (WeaponNameIs(weaponName, "MaceVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MaceVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsGiantsPlus3FeyPlus4")) { if (FamilyIs(defenderFamily, "Fey")) return 2; return FamilyIs(defenderFamily, "Giant") ? 1 : 0; }
+            if (WeaponNameIs(weaponName, "MacePlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "MacePlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsGiantsPlus1")) return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsAberrationsPlus1")) return FamilyIs(defenderFamily, "Aberration") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsArtificerConstructsPlus1")) return IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsBeastsPlus1")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsCelestialsPlus1")) return FamilyIs(defenderFamily, "Celestial") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsConstructsPlus1")) return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsElementalsPlus1")) return FamilyIs(defenderFamily, "Elemental") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsFeyPlus1")) return FamilyIs(defenderFamily, "Fey") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsHumanoidsPlus1")) return FamilyIs(defenderFamily, "Humanoid") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsMonstrositiesPlus1")) return FamilyIs(defenderFamily, "Monstrosity") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsPlantsPlus1")) return FamilyIs(defenderFamily, "Plant") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsUndeadPlus1")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsSorrAkkathPlus1")) return IsSorrAkkath(defender, defenderFamily) ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerVsDragonsPlus1")) return FamilyIs(defenderFamily, "Dragon") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsGoblinoidsPlus3")) return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsGiantsPlus3FeyPlus4")) { if (FamilyIs(defenderFamily, "Fey")) return 2; return FamilyIs(defenderFamily, "Giant") ? 1 : 0; }
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsDwarvesPlus3")) return MatchesTarget(defender, defenderFamily, "Dwarf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsElvesPlus3")) return MatchesTarget(defender, defenderFamily, "Elf") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsHalflingsPlus3")) return MatchesTarget(defender, defenderFamily, "Halfling") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsBeastsPlus3")) return FamilyIs(defenderFamily, "Beast") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsUndeadPlus3")) return FamilyIs(defenderFamily, "Undead") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus2VsAbominationsPlus3")) return FamilyIs(defenderFamily, "Abomination") ? 1 : 0;
+            if (WeaponNameIs(weaponName, "WarhammerPlus3VsDragons")) return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+            int generatedBonus = GetGeneratedWeaponFamilyBonus(weaponName, defender, defenderFamily);
+            if (generatedBonus >= 0) return generatedBonus;
             return 0;
+        }
+
+        private static int GetGeneratedWeaponFamilyBonus(string weaponName, object defender, string defenderFamily)
+        {
+            string[] prefixes = { "Maul", "Battleaxe", "Handaxe", "Halberd", "Pike", "LongMace",
+                "Morningstar", "Quarterstaff", "Javelin", "Spear", "Arrow", "Bolt", "Dart" };
+            bool generatedWeapon = false;
+            foreach (string prefix in prefixes)
+                if (!string.IsNullOrEmpty(weaponName) && weaponName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    generatedWeapon = true;
+                    break;
+                }
+            if (!generatedWeapon) return -1;
+
+            if (weaponName.IndexOf("Plus3VsDragons", StringComparison.OrdinalIgnoreCase) >= 0)
+                return FamilyIs(defenderFamily, "Dragon") ? 3 : 0;
+            if (weaponName.IndexOf("Plus2VsGiantsPlus3FeyPlus4", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                if (FamilyIs(defenderFamily, "Fey")) return 2;
+                return FamilyIs(defenderFamily, "Giant") ? 1 : 0;
+            }
+
+            int marker = weaponName.IndexOf("Plus2Vs", StringComparison.OrdinalIgnoreCase);
+            bool advanced = marker >= 0;
+            if (advanced) marker += "Plus2Vs".Length;
+            else
+            {
+                marker = weaponName.IndexOf("Vs", StringComparison.OrdinalIgnoreCase);
+                if (marker < 0) return -1;
+                marker += 2;
+            }
+
+            string tail = weaponName.Substring(marker);
+            string endMarker = advanced ? "Plus3" : "Plus1";
+            int end = tail.IndexOf(endMarker, StringComparison.OrdinalIgnoreCase);
+            if (end <= 0) return -1;
+            string token = tail.Substring(0, end);
+            return MatchesGeneratedCreatureToken(token, defender, defenderFamily) ? 1 : 0;
+        }
+
+        private static bool MatchesGeneratedCreatureToken(string token, object defender, string defenderFamily)
+        {
+            if (token == "Giants") return FamilyIs(defenderFamily, "Giant");
+            if (token == "Aberrations") return FamilyIs(defenderFamily, "Aberration");
+            if (token == "ArtificerConstructs") return IsArtificerConstruct(defender, defenderFamily);
+            if (token == "Beasts") return FamilyIs(defenderFamily, "Beast");
+            if (token == "Celestials") return FamilyIs(defenderFamily, "Celestial");
+            if (token == "Constructs") return FamilyIs(defenderFamily, "Construct") && !IsArtificerConstruct(defender, defenderFamily);
+            if (token == "Elementals") return FamilyIs(defenderFamily, "Elemental");
+            if (token == "Fey") return FamilyIs(defenderFamily, "Fey");
+            if (token == "Humanoids") return FamilyIs(defenderFamily, "Humanoid");
+            if (token == "Monstrosities") return FamilyIs(defenderFamily, "Monstrosity");
+            if (token == "Plants") return FamilyIs(defenderFamily, "Plant");
+            if (token == "Undead") return FamilyIs(defenderFamily, "Undead");
+            if (token == "SorrAkkath") return IsSorrAkkath(defender, defenderFamily);
+            if (token == "Dragons") return FamilyIs(defenderFamily, "Dragon");
+            if (token == "Goblinoids") return FamilyIs(defenderFamily, "Goblinoid") || MatchesTarget(defender, defenderFamily, "Goblin");
+            if (token == "Dwarves") return MatchesTarget(defender, defenderFamily, "Dwarf");
+            if (token == "Elves") return MatchesTarget(defender, defenderFamily, "Elf");
+            if (token == "Halflings") return MatchesTarget(defender, defenderFamily, "Halfling");
+            if (token == "Abominations") return FamilyIs(defenderFamily, "Abomination");
+            return false;
         }
 
         private static bool MatchesTarget(object defender, string defenderFamily, string token)
@@ -748,9 +1001,69 @@ namespace SolastaExpandedEquipmentMod
                  value.IndexOf("ShortswordVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
                  value.IndexOf("ShortswordPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
                  value.IndexOf("ShortswordPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                 value.IndexOf("DaggerVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                 value.IndexOf("DaggerPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                 value.IndexOf("DaggerPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0);
+                 value.IndexOf("ScimitarVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ScimitarPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ScimitarPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("RapierVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("RapierPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("RapierPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("GreatswordVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("GreatswordPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("GreatswordPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("KatanaVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("KatanaPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("KatanaPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongbowVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongbowPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongbowPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ShortbowVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ShortbowPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ShortbowPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MaceVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MacePlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MacePlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("WarhammerVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("WarhammerPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("WarhammerPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MaulVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MaulPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MaulPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("BattleaxeVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("BattleaxePlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("BattleaxePlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("HandaxeVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("HandaxePlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("HandaxePlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("HalberdVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("HalberdPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("HalberdPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("PikeVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("PikePlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("PikePlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongMaceVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongMacePlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("LongMacePlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MorningstarVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MorningstarPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("MorningstarPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("QuarterstaffVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("QuarterstaffPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("QuarterstaffPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("JavelinVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("JavelinPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("JavelinPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("SpearVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("SpearPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("SpearPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ArrowVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ArrowPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("ArrowPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("BoltVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("BoltPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("BoltPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("DartVs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("DartPlus2Vs", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 value.IndexOf("DartPlus3Vs", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private static bool WeaponNameIs(string actual, string expected)
